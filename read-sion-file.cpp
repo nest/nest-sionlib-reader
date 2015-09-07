@@ -63,6 +63,15 @@ public:
             sion_int64 end = sion_bytes_avail_in_block(sid_);
 
             size_t tail_size = 2 * sizeof(int) + 2 * sizeof(sion_int64) + 3 * sizeof(double);
+
+            // check if tail section was splitted over two chunks and fix seeking
+            if (tail_size > end)
+            {
+                last_chunk--;
+                tail_size -= end;
+                sion_seek(sid_, task, last_chunk, 0);
+                end = sion_bytes_avail_in_block(sid_);
+            }
             sion_seek(sid_, task, last_chunk, end - tail_size);
 
             // read tail
