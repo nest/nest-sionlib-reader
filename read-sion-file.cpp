@@ -56,7 +56,7 @@ public:
 
         for (int task = 0; task < ntasks; ++task)
         {
-			std::cout << "\033[1m" << filename_ << " - task #" << task << "\033[0m" << std::endl;
+            std::cout << "\033[1m" << filename_ << " - task #" << task << "\033[0m" << std::endl;
             size_t last_chunk = chunkcounts[task] - 1;
 
             sion_seek(sid_, task, last_chunk, 0);
@@ -89,8 +89,8 @@ public:
             int n_dev;
             sion_fread(&n_dev, sizeof(int), 1, sid_);
             std::cout << "number of devices: " << n_dev << std::endl;
-			
-			std::cout << std::endl;
+
+            std::cout << std::endl;
 
             for (size_t i = 0; i < n_dev; ++i)
             {
@@ -194,16 +194,16 @@ public:
 
                 if (files.find(device_gid) == files.end())
                 {
-					std::stringstream filename;
-					filename << "device-" << device_gid << "-" << task << ".dat";
+                    std::stringstream filename;
+                    filename << "device-" << device_gid << "-" << task << ".dat";
 
-					std::ofstream* file = new std::ofstream();
-					file->open(filename.str().c_str());
-					(*file) << std::fixed << std::setprecision(5);
+                    std::ofstream* file = new std::ofstream();
+                    file->open(filename.str().c_str());
+                    (*file) << std::fixed << std::setprecision(5);
                     files.insert(std::pair<int, std::ofstream*>(device_gid, file));
                 }
 
-				std::ofstream* file = files.find(device_gid)->second;
+                std::ofstream* file = files.find(device_gid)->second;
                 (*file) << device_gid << "\t" << neuron_gid << "\t" << time;
 
                 for (int i = 0; i < n_values; ++i)
@@ -213,22 +213,22 @@ public:
                     (*file) << "\t" << value;
                 }
                 (*file) << "\n";
-                
-				sion_get_current_location(sid_, &current_blk, &current_pos, &mc, &cs);
+
+                sion_get_current_location(sid_, &current_blk, &current_pos, &mc, &cs);
             }
 
             for (std::map<int, std::ofstream*>::iterator it = files.begin(); it != files.end();
                  ++it)
-			{
-				it->second->close();
-				delete it->second;
-			}
+            {
+                it->second->close();
+                delete it->second;
+            }
         }
     }
 
-    private:
-        std::string filename_;
-        int sid_;
+private:
+    std::string filename_;
+    int sid_;
 };
 
 int main(int argc, char** argv)
