@@ -54,86 +54,81 @@ public:
             &chunkcounts,
             &chunksizes);
 
-        for (int task = 0; task < ntasks; ++task)
+        int task = 0;
+
+        size_t last_chunk = chunkcounts[task] - 1;
+
+        sion_seek(sid_, task, last_chunk, 0);
+        sion_int64 end = sion_bytes_avail_in_block(sid_);
+
+        size_t tail_size = 2 * sizeof(int) + 2 * sizeof(sion_int64) + 3 * sizeof(double);
+
+        // check if tail section was splitted over two chunks and fix seeking
+        if (tail_size > end)
         {
-            std::cout << "\033[1m" << filename_ << " - task #" << task << "\033[0m" << std::endl;
-            size_t last_chunk = chunkcounts[task] - 1;
-
+            last_chunk--;
+            tail_size -= end;
             sion_seek(sid_, task, last_chunk, 0);
-            sion_int64 end = sion_bytes_avail_in_block(sid_);
+            end = sion_bytes_avail_in_block(sid_);
+        }
+        sion_seek(sid_, task, last_chunk, end - tail_size);
 
-            size_t tail_size = 2 * sizeof(int) + 2 * sizeof(sion_int64) + 3 * sizeof(double);
+        // read tail
+        int body_blk, info_blk;
+        sion_int64 body_pos, info_pos;
 
-            // check if tail section was splitted over two chunks and fix seeking
-            if (tail_size > end)
+        sion_fread(&body_blk, sizeof(int), 1, sid_);
+        sion_fread(&body_pos, sizeof(sion_int64), 1, sid_);
+        sion_fread(&info_blk, sizeof(int), 1, sid_);
+        sion_fread(&info_pos, sizeof(sion_int64), 1, sid_);
+
+        double t_start, t_end, duration;
+        sion_fread(&t_start, sizeof(double), 1, sid_);
+        sion_fread(&t_end, sizeof(double), 1, sid_);
+        sion_fread(&duration, sizeof(double), 1, sid_);
+
+        std::cout << "t_start          : " << t_start << std::endl;
+        std::cout << "t_end            : " << t_end << std::endl;
+        std::cout << "resolution       : " << duration << std::endl;
+
+        // read info section
+        sion_seek(sid_, task, info_blk, info_pos);
+
+        int n_dev;
+        sion_fread(&n_dev, sizeof(int), 1, sid_);
+        std::cout << "number of devices: " << n_dev << std::endl;
+
+        std::cout << std::endl;
+
+        for (size_t i = 0; i < n_dev; ++i)
+        {
+            int dev_id, type;
+            char name[16];
+            sion_fread(&dev_id, sizeof(int), 1, sid_);
+            sion_fread(&type, sizeof(int), 1, sid_);
+            sion_fread(&name, sizeof(char), 16, sid_);
+
+            if (type == 0)
+                std::cout << "spike detector ";
+            else if (type == 1)
+                std::cout << "multimeter ";
+            else
+                std::cout << "unknown device ";
+
+            std::cout << "#" << dev_id << " (\"" << name << "\"):" << std::endl;
+
+            int n_val;
+            sion_fread(&n_val, sizeof(int), 1, sid_);
+            if (n_val > 0)
+                std::cout << "  observables:" << std::endl;
+            for (size_t j = 0; j < n_val; ++j)
             {
-                last_chunk--;
-                tail_size -= end;
-                sion_seek(sid_, task, last_chunk, 0);
-                end = sion_bytes_avail_in_block(sid_);
+                char name[8];
+                sion_fread(&name, sizeof(char), 8, sid_);
+                std::cout << "    » " << name << std::endl;
             }
-            sion_seek(sid_, task, last_chunk, end - tail_size);
-
-            // read tail
-            int body_blk, info_blk;
-            sion_int64 body_pos, info_pos;
-
-            sion_fread(&body_blk, sizeof(int), 1, sid_);
-            sion_fread(&body_pos, sizeof(sion_int64), 1, sid_);
-            sion_fread(&info_blk, sizeof(int), 1, sid_);
-            sion_fread(&info_pos, sizeof(sion_int64), 1, sid_);
-
-            double t_start, t_end, duration;
-            sion_fread(&t_start, sizeof(double), 1, sid_);
-            sion_fread(&t_end, sizeof(double), 1, sid_);
-            sion_fread(&duration, sizeof(double), 1, sid_);
-
-            std::cout << "t_start          : " << t_start << std::endl;
-            std::cout << "t_end            : " << t_end << std::endl;
-            std::cout << "resolution       : " << duration << std::endl;
-
-            // read info section
-            sion_seek(sid_, task, info_blk, info_pos);
-
-            int n_dev;
-            sion_fread(&n_dev, sizeof(int), 1, sid_);
-            std::cout << "number of devices: " << n_dev << std::endl;
 
             std::cout << std::endl;
-
-            for (size_t i = 0; i < n_dev; ++i)
-            {
-                int dev_id, type;
-                char name[16];
-                unsigned long n_rec;
-                sion_fread(&dev_id, sizeof(int), 1, sid_);
-                sion_fread(&type, sizeof(int), 1, sid_);
-                sion_fread(&name, sizeof(char), 16, sid_);
-                sion_fread(&n_rec, sizeof(unsigned long), 1, sid_);
-
-                if (type == 0)
-                    std::cout << "spike detector ";
-                else if (type == 1)
-                    std::cout << "multimeter ";
-                else
-                    std::cout << "unknown device ";
-
-                std::cout << "#" << dev_id << " (\"" << name << "\"):" << std::endl;
-                std::cout << "  records: " << n_rec << std::endl;
-
-                int n_val;
-                sion_fread(&n_val, sizeof(int), 1, sid_);
-                if (n_val > 0)
-                    std::cout << "  observables:" << std::endl;
-                for (size_t j = 0; j < n_val; ++j)
-                {
-                    char name[8];
-                    sion_fread(&name, sizeof(char), 8, sid_);
-                    std::cout << "    » " << name << std::endl;
-                }
-
-                std::cout << std::endl;
-            }
         }
     }
 
@@ -161,22 +156,24 @@ public:
 
         for (int task = 0; task < ntasks; ++task)
         {
-            size_t last_chunk = chunkcounts[task] - 1;
-
-            sion_seek(sid_, task, last_chunk, 0);
-            sion_int64 end = sion_bytes_avail_in_block(sid_);
-
-            size_t tail_size = 2 * sizeof(int) + 2 * sizeof(sion_int64) + 3 * sizeof(double);
-            sion_seek(sid_, task, last_chunk, end - tail_size);
-
-            // read tail
             int body_blk, info_blk;
             sion_int64 body_pos, info_pos;
+            if (task == 0)
+            {
+                size_t last_chunk = chunkcounts[task] - 1;
 
-            sion_fread(&body_blk, sizeof(int), 1, sid_);
-            sion_fread(&body_pos, sizeof(sion_int64), 1, sid_);
-            sion_fread(&info_blk, sizeof(int), 1, sid_);
-            sion_fread(&info_pos, sizeof(sion_int64), 1, sid_);
+                sion_seek(sid_, task, last_chunk, 0);
+                sion_int64 end = sion_bytes_avail_in_block(sid_);
+
+                size_t tail_size = 2 * sizeof(int) + 2 * sizeof(sion_int64) + 3 * sizeof(double);
+                sion_seek(sid_, task, last_chunk, end - tail_size);
+
+                // read tail
+                sion_fread(&body_blk, sizeof(int), 1, sid_);
+                sion_fread(&body_pos, sizeof(sion_int64), 1, sid_);
+                sion_fread(&info_blk, sizeof(int), 1, sid_);
+                sion_fread(&info_pos, sizeof(sion_int64), 1, sid_);
+            }
 
             std::map<int, std::ofstream*> files;
 
@@ -188,8 +185,9 @@ public:
             int current_blk = body_blk;
             sion_int64 current_pos = body_pos;
 
-            while (
-                (current_blk < info_blk) | ((current_blk == info_blk) & (current_pos < info_pos)))
+            while ((task == 0) & ((current_blk < info_blk)
+                                     | ((current_blk == info_blk) & (current_pos < info_pos)))
+                | (task != 0) & (sion_bytes_avail_in_block(sid_) > 0))
             {
                 int device_gid;
                 int neuron_gid;
