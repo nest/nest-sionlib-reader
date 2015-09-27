@@ -196,7 +196,7 @@ public:
     sion_seek( sid_, task, info_blk, info_pos );
 
     int n_dev;
-    sion_fread( &n_dev, sizeof( int ), 1, sid_ )
+    sion_fread( &n_dev, sizeof( int ), 1, sid_ );
     std::cout << "number of devices: " << n_dev << std::endl;
 
     std::cout << std::endl;
