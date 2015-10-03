@@ -218,6 +218,10 @@ public:
 
       std::cout << "#" << dev_id << " (\"" << name << "\"):" << std::endl;
 
+      int n_rec;
+      sion_fread( &n_rec, sizeof( int ), 1, sid_ );
+      std::cout << "  recorded values: " << n_rec << std::endl;
+
       int n_val;
       sion_fread( &n_val, sizeof( int ), 1, sid_ );
       if ( n_val > 0 )
