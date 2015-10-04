@@ -17,14 +17,16 @@ proc.wait()
 LDFLAGS = proc.communicate()[0].strip().split()
 
 setup(
-        cmdclass = {'build_ext': build_ext},
-        ext_modules = [
-            Extension("nestio",
-                ["wrapper.pyx", "sion_reader.cpp", "raw_memory.cpp", "nestio.cpp"],
-                language='c++',
-                extra_compile_args=CFLAGS + ["-std=c++11"],
-                extra_link_args=LDFLAGS + ["-std=c++11"]
-                )
-            ],
-        include_dirs = [np.get_include()],
-        )
+    name="nestio",
+    version="0.0.9",
+    cmdclass = {'build_ext': build_ext},
+    ext_modules = [
+        Extension("nestio",
+            ["wrapper.pyx", "sion_reader.cpp", "raw_memory.cpp", "nestio.cpp"],
+            language='c++',
+            extra_compile_args=CFLAGS + ["-std=c++11"],
+            extra_link_args=LDFLAGS + ["-std=c++11"]
+            )
+        ],
+    include_dirs = [np.get_include()],
+    )
