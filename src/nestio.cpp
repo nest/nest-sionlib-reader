@@ -3,7 +3,7 @@
 
 #include "nestio.h"
 
-SIONFile::SIONFile(std::string filename)
+Reader::Reader(std::string filename)
 {
     sion_int64* chunk_sizes = NULL;
     sion_int32 fs_block_size;
@@ -182,7 +182,7 @@ SIONFile::SIONFile(std::string filename)
     }
 }
 
-DeviceData* SIONFile::get_device_data(int device_gid)
+DeviceData* Reader::get_device_data(int device_gid)
 {
     auto tmp = data_.find(device_gid);
 	if(tmp == data_.end())
@@ -194,7 +194,7 @@ DeviceData* SIONFile::get_device_data(int device_gid)
 	return &tmp->second;
 }
 
-std::vector<int> SIONFile::list_devices()
+std::vector<int> Reader::list_devices()
 {
     std::vector<int> gids;
     for (auto e = data_.cbegin(); e != data_.cend(); ++e)

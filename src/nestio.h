@@ -38,10 +38,10 @@ struct DeviceData
     RawMemory data;
 };
 
-class SIONFile
+class Reader
 {
 public:
-    SIONFile(std::string filename);
+    Reader(std::string filename);
 
     DeviceData* get_device_data(int device_gid);
 	std::vector<int> list_devices();

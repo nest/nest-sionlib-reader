@@ -22,7 +22,7 @@ setup(
     cmdclass = {'build_ext': build_ext},
     ext_modules = [
         Extension("nestio",
-            ["wrapper.pyx", "sion_reader.cpp", "raw_memory.cpp", "nestio.cpp"],
+            ["src/wrapper.pyx", "src/sion_reader.cpp", "src/raw_memory.cpp", "src/nestio.cpp"],
             language='c++',
             extra_compile_args=CFLAGS + ["-std=c++11"],
             extra_link_args=LDFLAGS + ["-std=c++11"]

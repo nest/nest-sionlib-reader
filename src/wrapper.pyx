@@ -17,8 +17,8 @@ cdef extern from "nestio.h":
 		string label;
 		int gid;
 
-	cdef cppclass CSIONFile "SIONFile":
-		CSIONFile(string) except +
+	cdef cppclass CReader "Reader":
+		CReader(string) except +
 		CDeviceData* get_device_data(int) except +
 		vector[int] list_devices()
 
@@ -47,19 +47,19 @@ cdef class DeviceData:
 		def __get__(self):
 			return self.entry.gid
 
-cdef class NESTFile:
-	cdef CSIONFile* sion_file
+cdef class Reader:
+	cdef CReader* reader
 	def __init__(self, filename):
-		self.sion_file = new CSIONFile(filename)
+		self.reader = new CReader(filename)
 	
 	def __iter__(self):
-		cdef vector[int] gids = self.sion_file.list_devices()
+		cdef vector[int] gids = self.reader.list_devices()
 		cdef CDeviceData* device_data_ptr;
 		for g in gids:
-			device_data_ptr = self.sion_file.get_device_data(g)
+			device_data_ptr = self.reader.get_device_data(g)
 			yield DeviceData(<long> device_data_ptr)
 
 	def __getitem__(self, device_gid):
-		cdef CDeviceData* device_data_ptr = self.sion_file.get_device_data(device_gid)
+		cdef CDeviceData* device_data_ptr = self.reader.get_device_data(device_gid)
 		dev_data = DeviceData(<long> device_data_ptr)
 		return dev_data
