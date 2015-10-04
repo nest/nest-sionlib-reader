@@ -43,7 +43,7 @@ class SIONFile
 public:
     SIONFile(std::string filename);
 
-    DeviceData& get_device_data(int device_gid);
+    DeviceData* get_device_data(int device_gid);
 	std::vector<int> list_devices();
 
 private:

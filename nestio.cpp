@@ -1,3 +1,6 @@
+#include <stdexcept>
+#include <sstream>
+
 #include "nestio.h"
 
 SIONFile::SIONFile(std::string filename)
@@ -179,9 +182,16 @@ SIONFile::SIONFile(std::string filename)
     }
 }
 
-DeviceData& SIONFile::get_device_data(int device_gid)
+DeviceData* SIONFile::get_device_data(int device_gid)
 {
-    return data_.find(device_gid)->second;
+    auto tmp = data_.find(device_gid);
+	if(tmp == data_.end())
+	{
+		std::stringstream msg;
+		msg << "unknown device gid #" << device_gid;
+		throw std::out_of_range(msg.str());
+	}
+	return &tmp->second;
 }
 
 std::vector<int> SIONFile::list_devices()
