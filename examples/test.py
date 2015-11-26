@@ -1,17 +1,17 @@
 import nest
 
-nest.SetKernelStatus({"local_num_threads": 2, "resolution": .5})
+nest.SetKernelStatus({"local_num_threads": 2, "resolution": .5, 'recording': {'logger': 'SIONLogger'}})
 
-nrns = nest.Create('iaf_cond_alpha', 2)
+nrns = nest.Create('iaf_psc_alpha', 4)
 
 nest.SetStatus(nrns, 'I_e', 1000.)
 
-meter = nest.Create("multimeter")
-nest.SetStatus(meter, {'record_to': ['file'], 'record_from': ['V_m', 'g_ex'], 'interval': .5})
+meter = nest.Create("multimeter", params={'stop': 3.})
+nest.SetStatus(meter, {'record_from': ['V_m'], 'interval': .5, 'stop': 3.})
 detector = nest.Create("spike_detector")
-nest.SetStatus(detector, {'record_to': ['file']})
+nest.SetStatus(detector, {'start': 0., 'stop': 10.})
 
 nest.Connect(meter, nrns)
 nest.Connect(nrns, detector)
 
-nest.Simulate(10.)
+nest.Simulate(15.)
