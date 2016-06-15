@@ -2,6 +2,7 @@
 #define SION_READER_H
 
 #include <cstring>
+#include <algorithm>
 
 #include "sion.h"
 
