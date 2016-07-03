@@ -1,7 +1,62 @@
 #include <stdexcept>
 #include <sstream>
+#include <cstdlib>
+#include <cstddef>
 
 #include "nestio.h"
+
+enum {LITTLE_ENDIAN = 0, BIG_ENDIAN = 1} sion_endian;
+
+static int16_t z1 = 1;
+sion_endian my_endian = ((static_cast<char*>(&z1))[0] == 0)
+  ? BIG_ENDIAN : LITTLE_ENDIAN;
+
+size_t normal_fread(const void* data, size_t size, size_t nitems, int sid);
+size_t swapped_fread(const void* data, size_t size, size_t nitems, int sid);
+
+size_t (*freader)(const void* data, size_t size, size_t nitems, int sid);
+
+size_t normal_fread(const void* data, size_t size, size_t nitems, int sid) {
+  return sion_fread(data, size, nitems, side);
+}
+
+template<size_t size>
+static void swap(const char* subbuf) {
+  for (size_t j = 0, jp = size-1; j < size/2; j++, jp--) {
+    char jt = subbuf[j];
+    subbuf[j] = subbuf[jp];
+    subbuf[jp] = jt;
+  }
+}
+
+template void swap(const char* buf) {}
+
+template<size_t size>
+static void swap_loop(const char* buf, size_t nitems) {
+  for (size_t i = 0; i < size*nitems; i += size) {
+    swap<size>(buf+i)
+  }
+}
+
+static void swap_switch(const char* buf, size_t size, size_t nitems) {
+  switch (size) {
+    case 1:                              return;
+    case 2:  swap_loop< 2>(buf, nitems); return;
+    case 4:  swap_loop< 4>(buf, nitems); return;
+    case 8:  swap_loop< 8>(buf, nitems); return;
+    case 16: swap_loop<16>(buf, nitems); return;
+  }
+
+  std::cerr << __FILE__ << ", " << __LINE__ << ": swap_switch illegal size " << size << std::endl;
+  std::abort();
+}
+
+static size_t swapped_fread(const void* data, size_t size, size_t nitems, int sid, bool swap) {
+  size_t r = sion_fread(data, size, nitems, sid);
+  if (swap) swap_switch(static_cast<char*>(data), size, nitems);
+  return r;
+}
+
 
 Reader::Reader(std::string filename)
 {
@@ -21,6 +76,8 @@ Reader::Reader(std::string filename)
         &fs_block_size,
         &ranks,
         &fh);
+
+    bool swap = sion_get_file_endianness(sid) == my_endian;
 
     // find tail
     int ntasks;
@@ -64,21 +121,21 @@ Reader::Reader(std::string filename)
     // read tail
     sion_int64 body_blk, info_blk, body_pos, info_pos;
 
-    sion_fread(&body_blk, sizeof(sion_int64), 1, sid);
-    sion_fread(&body_pos, sizeof(sion_int64), 1, sid);
-    sion_fread(&info_blk, sizeof(sion_int64), 1, sid);
-    sion_fread(&info_pos, sizeof(sion_int64), 1, sid);
+    swapped_fread(&body_blk, sizeof(sion_int64), 1, sid, swap);
+    swapped_fread(&body_pos, sizeof(sion_int64), 1, sid, swap);
+    swapped_fread(&info_blk, sizeof(sion_int64), 1, sid, swap);
+    swapped_fread(&info_pos, sizeof(sion_int64), 1, sid, swap);
 
     double t_start, t_end, duration;
-    sion_fread(&t_start, sizeof(double), 1, sid);
-    sion_fread(&t_end, sizeof(double), 1, sid);
-    sion_fread(&duration, sizeof(double), 1, sid);
+    swapped_fread(&t_start, sizeof(double), 1, sid, swap);
+    swapped_fread(&t_end, sizeof(double), 1, sid, swap);
+    swapped_fread(&duration, sizeof(double), 1, sid, swap);
 
     // read info section
     sion_seek(sid, task, info_blk, info_pos);
 
     int n_dev;
-    sion_fread(&n_dev, sizeof(sion_uint64), 1, sid);
+    swapped_fread(&n_dev, sizeof(sion_uint64), 1, sid, swap);
 
     for (size_t i = 0; i < n_dev; ++i)
     {
@@ -86,22 +143,22 @@ Reader::Reader(std::string filename)
 		sion_uint32 type;
         char name[16];
         char label[16];
-        sion_fread(&dev_id, sizeof(sion_uint64), 1, sid);
-        sion_fread(&type, sizeof(sion_uint32), 1, sid);
-        sion_fread(&name, sizeof(char), 16, sid);
-        sion_fread(&label, sizeof(char), 16, sid);
+        swapped_fread(&dev_id, sizeof(sion_uint64), 1, sid, swap);
+        swapped_fread(&type, sizeof(sion_uint32), 1, sid, swap);
+        swapped_fread(&name, sizeof(char), 16, sid, swap);
+        swapped_fread(&label, sizeof(char), 16, sid, swap);
 
         int n_rec;
-        sion_fread(&n_rec, sizeof(sion_uint64), 1, sid);
+        swapped_fread(&n_rec, sizeof(sion_uint64), 1, sid, swap);
 
         int n_val;
-        sion_fread(&n_val, sizeof(sion_uint32), 1, sid);
+        swapped_fread(&n_val, sizeof(sion_uint32), 1, sid, swap);
 
 		std::vector<std::string> observables;
         for (size_t j = 0; j < n_val; ++j)
         {
             char name[8];
-            sion_fread(&name, sizeof(char), 8, sid);
+            swapped_fread(&name, sizeof(char), 8, sid, swap);
             observables.push_back(name);
         }
 
@@ -125,23 +182,23 @@ Reader::Reader(std::string filename)
 
             sion_seek(sid, task, last_chunk, 0);
 
-            sion_int64 end = sion_bytes_avail_in_block(sid);
+            sion_int64 end = sion_bytes_avail_in_block(sid, swap);
 
             size_t tail_size = 4 * sizeof(sion_int64) + 3 * sizeof(double);
             sion_seek(sid, task, last_chunk, end - tail_size);
 
             // read tail
-            sion_fread(&body_blk, sizeof(sion_int64), 1, sid);
-            sion_fread(&body_pos, sizeof(sion_int64), 1, sid);
-            sion_fread(&info_blk, sizeof(sion_int64), 1, sid);
-            sion_fread(&info_pos, sizeof(sion_int64), 1, sid);
+            swapped_fread(&body_blk, sizeof(sion_int64), 1, sid, swap);
+            swapped_fread(&body_pos, sizeof(sion_int64), 1, sid, swap);
+            swapped_fread(&info_blk, sizeof(sion_int64), 1, sid, swap);
+            swapped_fread(&info_pos, sizeof(sion_int64), 1, sid, swap);
         }
         else
         {
             info_blk = chunkcounts[task] - 1;
 
             sion_seek(sid, task, info_blk, 0);
-            info_pos = sion_bytes_avail_in_block(sid);
+            info_pos = sion_bytes_avail_in_block(sid, swap);
         }
 
         SIONReader reader(sid);

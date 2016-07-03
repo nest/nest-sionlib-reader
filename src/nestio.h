@@ -23,11 +23,11 @@ struct DeviceData
     {
     }
 
-	double* get_data_ptr()
-	{
-        double* data_ptr = reinterpret_cast<double*>(data.get_ptr());
-		return data_ptr;
-	}
+    double* get_data_ptr()
+    {
+      double* data_ptr = reinterpret_cast<double*>(data.get_ptr());
+      return data_ptr;
+    }
 
     int gid;
     std::string name;
@@ -46,8 +46,12 @@ public:
     DeviceData* get_device_data(int device_gid);
 	std::vector<int> list_devices();
 
+    size_t normal_fread(const void* data, size_t size, size_t nitems, int sid);
+    size_t swapped_fread(const void* data, size_t size, size_t nitems, int sid);
+
 private:
     std::map<int, DeviceData> data_;
+    size_t (Reader::*freader)(const void* data, size_t size, size_t nitems, int sid);
 };
 
 #endif // NESTIO_H
