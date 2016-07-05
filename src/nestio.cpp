@@ -5,91 +5,125 @@
 
 #include "nestio.h"
 
-enum {LITTLE_ENDIAN = 0, BIG_ENDIAN = 1} sion_endian;
+class Sion {
+public:
+  int n_tasks;
+  int n_files;
+  sion_int64* chunk_sizes;
+  sion_int32 fs_block_size;
+  int* ranks;
+  FILE* fh;
 
-static int16_t z1 = 1;
-sion_endian my_endian = ((static_cast<char*>(&z1))[0] == 0)
-  ? BIG_ENDIAN : LITTLE_ENDIAN;
+  const int sid;
+  const bool do_swap;
+  
+  enum {LITTLE_ENDIAN = 0, BIG_ENDIAN = 1} sion_endian;
 
-size_t normal_fread(const void* data, size_t size, size_t nitems, int sid);
-size_t swapped_fread(const void* data, size_t size, size_t nitems, int sid);
+  static const int16_t z1 = 1;
+  static const sion_endian my_endian
+    = ((static_cast<char*>(&z1))[0] == 0)
+      ? BIG_ENDIAN : LITTLE_ENDIAN;
 
-size_t (*freader)(const void* data, size_t size, size_t nitems, int sid);
-
-size_t normal_fread(const void* data, size_t size, size_t nitems, int sid) {
-  return sion_fread(data, size, nitems, side);
-}
-
-template<size_t size>
-static void swap(const char* subbuf) {
-  for (size_t j = 0, jp = size-1; j < size/2; j++, jp--) {
-    char jt = subbuf[j];
-    subbuf[j] = subbuf[jp];
-    subbuf[jp] = jt;
-  }
-}
-
-template void swap(const char* buf) {}
-
-template<size_t size>
-static void swap_loop(const char* buf, size_t nitems) {
-  for (size_t i = 0; i < size*nitems; i += size) {
-    swap<size>(buf+i)
-  }
-}
-
-static void swap_switch(const char* buf, size_t size, size_t nitems) {
-  switch (size) {
-    case 1:                              return;
-    case 2:  swap_loop< 2>(buf, nitems); return;
-    case 4:  swap_loop< 4>(buf, nitems); return;
-    case 8:  swap_loop< 8>(buf, nitems); return;
-    case 16: swap_loop<16>(buf, nitems); return;
+  int getsid(const std::string& filename) {
+    return sion_open((char*) filename.c_str(),
+		     "rb",
+		     &n_tasks,
+		     &n_files,
+		     &chunk_sizes,
+		     &fs_block_size,
+		     &ranks,
+		     &fh);
   }
 
-  std::cerr << __FILE__ << ", " << __LINE__ << ": swap_switch illegal size " << size << std::endl;
-  std::abort();
-}
+  Sion(const std::string& filename)
+    : n_tasks(0)
+    , n_files(0)
+    , chunk_sizes(NULL)
+    , fs_block_size(0)
+    , ranks(NULL)
+    , fh(NULL)
+    , sid(getsid(filename))
+    , do_swap(sion_get_file_endianness(psid) != my_endian)
+  {};
 
-static size_t swapped_fread(const void* data, size_t size, size_t nitems, int sid, bool swap) {
-  size_t r = sion_fread(data, size, nitems, sid);
-  if (swap) swap_switch(static_cast<char*>(data), size, nitems);
-  return r;
-}
+  template<typename T>
+  static void swap_elem(T* subbuf) {
+    char* start = static_cast<char*>(subbuf);
+    char* end   = start + sizeof(T) - 1;
+    char* mid   = start + sizeof(T) / 2; 
+    for (; end >= mid; start++, end--)
+      std::swap(*start, *end);
+  };
 
+  template<typename T>
+  static void swap_array(T* buf, size_t nitems) {
+    for (T* i = buf; i < buf+nitems; i++)
+      swap_elem(i);
+  };
+
+  template<typename T>
+  size_t fread(T* data, size_t nitems = 1) {
+    size_t r = sion_fread(data, sizeof(T), nitems, sid);
+    if (do_swap) swap_array(data, nitems);
+    return r;
+  }
+
+  size_t fread(char* data, size_t nitems = 1) {
+    return sion_fread(data, sizeof(char), nitems, sid);
+  }
+
+  void get_locations(int* ntasks,
+		     int* maxblocks,
+		     sion_int64* globalskip,
+		     sion_int64* start_of_varheader,
+		     sion_int64** localsizes,
+		     sion_int64** globalranks,
+		     sion_int64** chunkcounts,
+		     sion_int64** chunksizes) {
+    sion_get_locations(
+	sid,
+        ntasks,
+        maxblocks,
+        globalskip,
+        start_of_varheader,
+        localsizes,
+        globalranks,
+        chunkcounts,
+        chunksizes
+    );
+  };
+
+  void seek(int task, size_t chunk, size_t pos = 0) {
+    sion_seek(sid, task, chunk, pos);
+  };
+
+  sion_int64 bytes_avail_in_block() {
+    return sion_bytes_avail_in_block(sid);
+  }
+};
+
+class Chunker {
+public:
+  Sion& sion;
+
+  Chunker(Sion& psion): sion(psion) {};
+}
 
 Reader::Reader(std::string filename)
 {
-    sion_int64* chunk_sizes = NULL;
-    sion_int32 fs_block_size;
-    int n_tasks;
-    int n_files;
-    int* ranks = NULL;
+  Sion sion(filename);
 
-    FILE* fh;
-
-    int sid = sion_open((char*) filename.c_str(),
-        "rb",
-        &n_tasks,
-        &n_files,
-        &chunk_sizes,
-        &fs_block_size,
-        &ranks,
-        &fh);
-
-    bool swap = sion_get_file_endianness(sid) == my_endian;
-
-    // find tail
-    int ntasks;
-    int maxblocks;
-    sion_int64 globalskip;
-    sion_int64 start_of_varheader;
-    sion_int64* localsizes;
-    sion_int64* globalranks;
-    sion_int64* chunkcounts;
-    sion_int64* chunksizes;
-
-    sion_get_locations(sid,
+  // find tail
+  int ntasks;
+  int maxblocks;
+  sion_int64 globalskip;
+  sion_int64 start_of_varheader;
+  sion_int64* localsizes;
+  sion_int64* globalranks;
+  sion_int64* chunkcounts;
+  sion_int64* chunksizes;
+  
+  sion.get_locations(
         &ntasks,
         &maxblocks,
         &globalskip,
@@ -97,15 +131,14 @@ Reader::Reader(std::string filename)
         &localsizes,
         &globalranks,
         &chunkcounts,
-        &chunksizes);
+        &chunksizes
+    );
 
     int task = 0;
-
     size_t last_chunk = chunkcounts[task] - 1;
 
-    sion_seek(sid, task, last_chunk, 0);
-    sion_int64 end = sion_bytes_avail_in_block(sid);
-
+    sion.seek(task, last_chunk);
+    sion_int64 end = sion.bytes_avail_in_block();
     size_t tail_size = 4 * sizeof(sion_int64) + 3 * sizeof(double);
 
     // check if tail section was splitted over two chunks and fix seeking
@@ -113,59 +146,62 @@ Reader::Reader(std::string filename)
     {
         last_chunk--;
         tail_size -= end;
-        sion_seek(sid, task, last_chunk, 0);
-        end = sion_bytes_avail_in_block(sid);
+        sion.seek(task, last_chunk);
+        end = sion.bytes_avail_in_block(sid);
     }
-    sion_seek(sid, task, last_chunk, end - tail_size);
+    sion.seek(task, last_chunk, end - tail_size);
 
     // read tail
     sion_int64 body_blk, info_blk, body_pos, info_pos;
-
-    swapped_fread(&body_blk, sizeof(sion_int64), 1, sid, swap);
-    swapped_fread(&body_pos, sizeof(sion_int64), 1, sid, swap);
-    swapped_fread(&info_blk, sizeof(sion_int64), 1, sid, swap);
-    swapped_fread(&info_pos, sizeof(sion_int64), 1, sid, swap);
+    sion.fread(&body_blk);
+    sion.fread(&body_pos);
+    sion.fread(&info_blk);
+    sion.fread(&info_pos);
 
     double t_start, t_end, duration;
-    swapped_fread(&t_start, sizeof(double), 1, sid, swap);
-    swapped_fread(&t_end, sizeof(double), 1, sid, swap);
-    swapped_fread(&duration, sizeof(double), 1, sid, swap);
+    sion.fread(&t_start);
+    sion.fread(&t_end);
+    sion.fread(&duration);
 
     // read info section
-    sion_seek(sid, task, info_blk, info_pos);
+    sion.seek(task, info_blk, info_pos);
 
-    int n_dev;
-    swapped_fread(&n_dev, sizeof(sion_uint64), 1, sid, swap);
+    sion_uint64 n_dev;
+    sion.fread(&n_dev);
 
     for (size_t i = 0; i < n_dev; ++i)
     {
         sion_uint64 dev_id;
-		sion_uint32 type;
+	sion_uint32 type;
         char name[16];
         char label[16];
-        swapped_fread(&dev_id, sizeof(sion_uint64), 1, sid, swap);
-        swapped_fread(&type, sizeof(sion_uint32), 1, sid, swap);
-        swapped_fread(&name, sizeof(char), 16, sid, swap);
-        swapped_fread(&label, sizeof(char), 16, sid, swap);
+        sion.fread(&dev_id);
+        sion.fread(&type);
+        sion.fread(name, 16);
+        sion.fread(label, 16);
 
-        int n_rec;
-        swapped_fread(&n_rec, sizeof(sion_uint64), 1, sid, swap);
+        sion_uint64 n_rec;
+        sion.fread(&n_rec);
 
-        int n_val;
-        swapped_fread(&n_val, sizeof(sion_uint32), 1, sid, swap);
+        sion_uint32 n_val;
+        sion.fread(&n_val);
 
-		std::vector<std::string> observables;
+	std::vector<std::string> observables;
         for (size_t j = 0; j < n_val; ++j)
         {
-            char name[8];
-            swapped_fread(&name, sizeof(char), 8, sid, swap);
-            observables.push_back(name);
+            char ob_name[8];
+            sion.fread(ob_name, 8);
+            observables.push_back(ob_name);
         }
 
-        size_t entry_size = sizeof(double) + sizeof(double) + n_val * sizeof(double);
-        std::pair<size_t, size_t> shape = std::make_pair(n_rec, n_val + 3);
+        size_t entry_size
+	  = sizeof(double) + sizeof(double) + n_val * sizeof(double);
+        std::pair<size_t, size_t> shape
+	  = std::make_pair(n_rec, n_val + 3);
 
-        DeviceData& entry = data_.insert(std::make_pair(dev_id, DeviceData(shape))).first->second;
+        DeviceData& entry = data_
+	  .insert(std::make_pair(dev_id, DeviceData(shape)))
+	  .first->second;
         entry.gid = dev_id;
         entry.name = name;
         entry.label = label;
@@ -179,26 +215,25 @@ Reader::Reader(std::string filename)
         if (task == 0)
         {
             size_t last_chunk = chunkcounts[task] - 1;
+            sion.seek(task, last_chunk);
 
-            sion_seek(sid, task, last_chunk, 0);
-
-            sion_int64 end = sion_bytes_avail_in_block(sid, swap);
-
-            size_t tail_size = 4 * sizeof(sion_int64) + 3 * sizeof(double);
-            sion_seek(sid, task, last_chunk, end - tail_size);
+            sion_int64 end = sion.bytes_avail_in_block();
+            size_t tail_size
+	      = 4 * sizeof(sion_int64) + 3 * sizeof(double);
+            sion.seek(task, last_chunk, end - tail_size);
 
             // read tail
-            swapped_fread(&body_blk, sizeof(sion_int64), 1, sid, swap);
-            swapped_fread(&body_pos, sizeof(sion_int64), 1, sid, swap);
-            swapped_fread(&info_blk, sizeof(sion_int64), 1, sid, swap);
-            swapped_fread(&info_pos, sizeof(sion_int64), 1, sid, swap);
+            sion.fread(&body_blk);
+            sion.fread(&body_pos);
+            sion.fread(&info_blk);
+            sion.fread(&info_pos);
         }
         else
         {
             info_blk = chunkcounts[task] - 1;
 
-            sion_seek(sid, task, info_blk, 0);
-            info_pos = sion_bytes_avail_in_block(sid, swap);
+            sion.seek(task, info_blk);
+            info_pos = sion.bytes_avail_in_block();
         }
 
         SIONReader reader(sid);
@@ -242,13 +277,13 @@ Reader::Reader(std::string filename)
 DeviceData* Reader::get_device_data(int device_gid)
 {
     auto tmp = data_.find(device_gid);
-	if(tmp == data_.end())
-	{
-		std::stringstream msg;
-		msg << "unknown device gid #" << device_gid;
-		throw std::out_of_range(msg.str());
-	}
-	return &tmp->second;
+    if(tmp == data_.end())
+      {
+	std::stringstream msg;
+	msg << "unknown device gid #" << device_gid;
+	throw std::out_of_range(msg.str());
+      }
+    return &tmp->second;
 }
 
 std::vector<int> Reader::list_devices()

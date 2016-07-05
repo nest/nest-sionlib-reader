@@ -11,12 +11,12 @@ public:
     SIONReader(int sid);
     ~SIONReader();
     
-	void seek(int task, int chunk, int pos);
+    void seek(int task, int chunk, int pos);
     sion_int64 get_position();
     sion_int64 get_size();
     sion_int64 get_chunk();
     
-	template <typename T>
+    template <typename T>
     void read(T* buffer, int count);
 
 private:
