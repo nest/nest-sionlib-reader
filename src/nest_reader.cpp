@@ -87,7 +87,7 @@ void NestReader::read_next_values(SIONTaskReader& treader) {
   treader.read(subbuf, n_values);
 }
 
-DeviceData* NestReader::get_device_data(int device_gid)
+DeviceData* NestReader::get_device_data(uint64_t device_gid)
 {
     auto tmp = data.find(device_gid);
     if(tmp == data.end())
@@ -99,9 +99,9 @@ DeviceData* NestReader::get_device_data(int device_gid)
     return &tmp->second;
 }
 
-std::vector<int> NestReader::list_devices()
+std::vector<uint64_t> NestReader::list_devices()
 {
-  std::vector<int> gids;
+  std::vector<uint64_t> gids;
   for (auto&& e: data)
     gids.push_back(e.second.gid);
   

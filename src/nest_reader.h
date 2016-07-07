@@ -46,8 +46,8 @@ class NestReader
 public:
   NestReader(const std::string& filename);
   
-  DeviceData* get_device_data(int device_gid);
-  std::vector<int> list_devices();
+  DeviceData* get_device_data(uint64_t device_gid);
+  std::vector<uint64_t> list_devices();
 
   double get_start() {return t_start;};
   double get_end() {return t_end;};

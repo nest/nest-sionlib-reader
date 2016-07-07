@@ -14,11 +14,11 @@ private:
   std::shared_ptr<vbuf> sbuf;
 
 public:
-  char* buffer;
+  char* const buffer;
 
 private:
   char* start;
-  char* end;
+  char* const end;
 
 public:
   RawMemory(size_t size);

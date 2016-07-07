@@ -24,8 +24,8 @@ cdef extern from "nest_reader.h":
     cdef cppclass CNestReader "NestReader":
         CNestReader(string) except +
 
-        CDeviceData* get_device_data(int) except +
-        vector[int] list_devices()
+        CDeviceData* get_device_data(uint64_t) except +
+        vector[uint64_t] list_devices()
 
         double get_start() except +
         double get_end() except +
@@ -44,26 +44,27 @@ class DevArray(np.ndarray):
 
 cdef class DeviceData:
     cdef CDeviceData* entry
-    cdef object nestReader # keep a reference for the parent
+    cdef NestReader nest_reader # keep a reference for the parent
 
-    def __cinit__(self, long entry_ptr, NestReader nestReader):
-        self.entry = <CDeviceData*> entry_ptr
-        self.nestReader = nestReader
+    def __cinit__(self, uint64_t gid, NestReader nest_reader):
+        self.entry = nest_reader.reader.get_device_data(gid)
+        self.nest_reader = nest_reader
 
     def __dealloc__(self):
-        self.nestReader = None
+        self.nest_reader = None
 
     property data:
         def __get__(self):
             # underlying object: [gid=uint64, step=int64, offset=double, values....][shape[0]]
             # Length of row: shape[1]
-            cdef size_t rows   = self.entry.rows
-            cdef size_t values = self.entry.values
-            cdef char*  data   = self.entry.get_data()
+            cdef:
+                size_t rows   = self.entry.rows
+                size_t values = self.entry.values
+                char*  data   = self.entry.get_data()
             
-            cdef str     dtype = "=Q=q=d={}d".format(values)
-            cdef tuple   dim   = (rows,)
-            cdef cvarray buf   = cvarray(data, shape=dim, dtype=dtype)
+                str     dtype = "=Q=q=d={}d".format(values)
+                tuple   dim   = (rows,)
+                cvarray buf   = cvarray(data, shape=dim, dtype=dtype)
 
             return DevArray(buf, self, dtype)
 
@@ -96,16 +97,16 @@ cdef class NestReader:
         del self.reader
         
     def __iter__(self):
-        cdef vector[int] gids = self.reader.list_devices()
-        cdef CDeviceData* device_data_ptr;
-        for g in gids:
-            device_data_ptr = self.reader.get_device_data(g)
-            yield DeviceData(<long> device_data_ptr)
+        cdef:
+            vector[uint64_t] gids = self.reader.list_devices()
+            CDeviceData* device_data_ptr;
+            uint64_t g
 
-    def __getitem__(self, device_gid):
-        cdef CDeviceData* device_data_ptr = self.reader.get_device_data(device_gid)
-        dev_data = DeviceData(<long> device_data_ptr)
-        return dev_data
+        for g in gids:
+            yield DeviceData(g, self)
+
+    def __getitem__(self, uint64_t gid):
+        return DeviceData(gid, self)
 
     property t_start:
         def __get__(self):
