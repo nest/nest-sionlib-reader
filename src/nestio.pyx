@@ -6,8 +6,7 @@ import numpy as np
 cimport numpy as np
 from cython.view cimport array as cvarray
 
-
-cdef extern from "nestio.h":
+cdef extern from "nest_reader.h":
     cdef cppclass CDeviceData "DeviceData":
         CDeviceData(size_t, size_t) except +
 

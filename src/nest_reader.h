@@ -1,9 +1,10 @@
+#ifndef NESTIO_H
+#define NESTIO_H
+
 #include <algorithm>
 #include <cstdio>
 #include <cstring>
 #include <iostream>
-#ifndef NESTIO_H
-#define NESTIO_H
 
 #include <vector>
 #include <string>

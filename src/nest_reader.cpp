@@ -5,9 +5,7 @@
 
 #include <type_traits>
 
-#include "nestio.h"
-
-
+#include "nest_reader.h"
 
 NestReader::NestReader(const std::string& filename)
 {

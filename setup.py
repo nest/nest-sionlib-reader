@@ -18,11 +18,11 @@ LDFLAGS = proc.communicate()[0].strip().split()
 
 setup(
     name="nestio",
-    version="0.0.9",
+    version="0.1.0",
     cmdclass = {'build_ext': build_ext},
     ext_modules = [
         Extension("nestio",
-            ["src/wrapper.pyx", "src/sion_reader.cpp", "src/raw_memory.cpp", "src/nestio.cpp"],
+            ["src/nestio.pyx", "src/sion_reader.cpp", "src/raw_memory.cpp", "src/nest_reader.cpp"],
             language='c++',
             extra_compile_args=CFLAGS + ["-std=c++11"],
             extra_link_args=LDFLAGS + ["-std=c++11"]
