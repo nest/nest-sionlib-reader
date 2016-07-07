@@ -18,40 +18,55 @@
 
 struct DeviceData
 {
-    DeviceData(std::pair<size_t, size_t> shape)
-        : data(shape.first * shape.second * sizeof(double)), shape(shape)
-    {
-    }
+  DeviceData(size_t rows, size_t values)
+    : data(rows * (sizeof(uint64_t)
+		   + sizeof(int64_t)
+		   + sizeof(double)
+		   + values * sizeof(double)))
+    , rows(rows)
+    , values(values)
+  {}
 
-    double* get_data_ptr()
-    {
-      double* data_ptr = reinterpret_cast<double*>(data.get_ptr());
-      return data_ptr;
-    }
+  char* get_data() {return data.buffer;};
 
-    int gid;
-    std::string name;
-    std::string label;
-    std::vector<std::string> observables;
+  uint64_t gid;
+  uint32_t type;
+  std::string name;
+  std::string label;
+  std::vector<std::string> observables;
 
-    std::pair<size_t, size_t> shape;
-    RawMemory data;
+  RawMemory data;
+  size_t rows;
+  size_t values;
 };
 
-class Reader
+class NestReader
 {
 public:
-    Reader(std::string filename);
+  NestReader(const std::string& filename);
+  
+  DeviceData* get_device_data(int device_gid);
+  std::vector<int> list_devices();
 
-    DeviceData* get_device_data(int device_gid);
-	std::vector<int> list_devices();
+  double get_start() {return t_start;};
+  double get_end() {return t_end;};
+  double get_duration() {return duration;};
 
-    size_t normal_fread(const void* data, size_t size, size_t nitems, int sid);
-    size_t swapped_fread(const void* data, size_t size, size_t nitems, int sid);
+protected:
+  void read_next_device(SIONReader&);
+  void read_next_values(SIONTaskReader&);
 
 private:
-    std::map<int, DeviceData> data_;
-    size_t (Reader::*freader)(const void* data, size_t size, size_t nitems, int sid);
+  std::map<uint64_t, DeviceData> data;
+  DeviceData& add_entry(uint64_t dev_id, size_t n_rec, size_t n_val) {
+    return data
+      .insert(std::make_pair(dev_id, DeviceData(n_rec, n_val)))
+      .first->second;
+  };
+
+  double t_start;
+  double t_end;
+  double duration;
 };
 
 #endif // NESTIO_H

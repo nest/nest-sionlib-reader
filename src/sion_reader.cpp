@@ -1,71 +1,126 @@
 #include "sion_reader.h"
 
-SIONReader::SIONReader(int sid)
-    : sid_(sid), task_(0), chunk_(0), position_(0), size_(0), buffer_size_(0), buffer_(NULL)
-{
+#include <stdexcept>
+#include <string>
+#include <sstream>
+#include <algorithm>
+
+class sion_error: public std::runtime_error {
+public:
+  sion_error(const std::string& what_arg )
+    : std::runtime_error(what_arg)
+  {};
+};
+
+void SIONReader::get_current_location(sion_int64* blk, sion_int64* pos) {
+  int lblk; // interface mismatch in sionlib api
+  int maxchunks;
+  sion_int64* chunksizes;
+  
+  if (sion_get_current_location(sid, &lblk, pos, &maxchunks, &chunksizes)
+      != SION_SUCCESS)
+    throw sion_error("sion_get_current_location");
+  *blk = lblk;
 }
 
-SIONReader::~SIONReader()
-{
-    if (buffer_ != NULL)
-        delete[] buffer_;
+SIONReader::SIONFile::SIONFile(const std::string& filename)
+{  
+  // throw aways for interface
+  int n_files;
+  sion_int32 fs_block_size;
+  int* ranks;
+  FILE* fh;
+
+  sid = sion_open((char*) filename.c_str(),
+		  "rb",
+		  &n_tasks,
+		  &n_files,
+		  &chunk_sizes,
+		  &fs_block_size,
+		  &ranks,
+		  &fh);
+  if (sid == -1)
+    throw sion_error(std::string("sion_open: ") + filename);
 }
 
-void SIONReader::seek(int task, int chunk, int pos)
-{
-    task_ = task;
-    fetch_chunk_(chunk);
+SIONReader::SIONReader(const std::string& filename)
+  : SIONReader(SIONFile(filename))
+{}
 
-    chunk_ = chunk;
-    position_ = pos;
+SIONReader::SIONReader(const SIONFile& file)
+  : sid(file.sid)
+  , n_tasks(file.n_tasks)
+  , chunk_sizes(file.chunk_sizes)
+  , swapper(sion_endianness_swap_needed(sid))
+{};
+
+SIONReader::~SIONReader() {
+  if (sion_close(sid) != SION_SUCCESS)
+    throw sion_error("sion_close");
 }
 
-sion_int64 SIONReader::get_position()
-{
-    return position_;
+void SIONReader::seek(int rank, size_t chunk, size_t pos) {
+  if (sion_seek(sid, rank, chunk, pos) != SION_SUCCESS) {
+    std::stringstream msg;
+    msg << "sion_seek:"
+	<< " rank=" << rank
+	<< " chunk=" << chunk
+	<< " pos=" << pos;
+    throw sion_error(msg.str());
+  }
 }
 
-sion_int64 SIONReader::get_size()
+SIONTaskReader::SIONTaskReader(SIONReader& reader,
+			       int task,
+			       sion_int64 eof_chunk,
+			       sion_int64 eof_pos)
+  : reader(reader)
+  , task(task)
+  , chunk(0)
+  , chunk_size(0)
+  , buffer(NULL)
+  , buffer_size(0)
+  , start(NULL)
+  , end(NULL)
+  , eof_chunk(eof_chunk)
+  , eof_pos(eof_pos)
 {
-    return size_;
+  fetch_chunk(0);
 }
 
-sion_int64 SIONReader::get_chunk()
+SIONTaskReader::~SIONTaskReader()
 {
-    return chunk_;
+  delete [] buffer;
 }
 
-void SIONReader::fetch_chunk_(int chunk)
+void SIONTaskReader::fetch_chunk(int chunk_)
 {
-    if (buffer_ != NULL)
-        delete[] buffer_;
+  chunk = chunk_;
+  reader.seek(task, chunk, 0);
+  chunk_size = reader.get_size(task, chunk);
+  
+  if (static_cast<size_t>(chunk_size) > buffer_size) {
+    delete [] buffer;
+    buffer = new char[chunk_size];
+    buffer_size = chunk_size;
+  }
+  
+  start = buffer;
+  end = buffer + chunk_size;
+  reader.read(buffer, chunk_size);
+}
 
-    int ntasks;
-    int maxblocks;
-    sion_int64 globalskip;
-    sion_int64 start_of_varheader;
-    sion_int64* localsizes;
-    sion_int64* globalranks;
-    sion_int64* chunkcounts;
-    sion_int64* chunksizes;
+void SIONTaskReader::readbuf(char* data, size_t size) {
+  size_t copied = std::min(size, static_cast<size_t>(end-start));
+  size_t remaining = size - copied;
 
-    sion_get_locations(sid_,
-        &ntasks,
-        &maxblocks,
-        &globalskip,
-        &start_of_varheader,
-        &localsizes,
-        &globalranks,
-        &chunkcounts,
-        &chunksizes);
-
-    sion_seek(sid_, task_, chunk, 0);
-    // size_ = sion_bytes_avail_in_block( sid_ );
-    size_ = chunksizes[ntasks * chunk + task_];
-
-    chunk_ = chunk;
-    buffer_ = new char[size_]();
-    position_ = 0;
-
-    sion_fread(buffer_, 1, size_, sid_);
+  std::memcpy(data, start, copied);
+  start += copied;
+  
+  if (remaining > 0)
+  {
+    fetch_chunk(chunk + 1);
+    std::memcpy(data + copied, start, remaining);
+    start += remaining;
+  }
 }
