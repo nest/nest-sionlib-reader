@@ -55,14 +55,15 @@ cdef class DeviceData:
 
     property data:
         def __get__(self):
-            # underlying object: [gid=uint64, int64=step, offset=double, values....][shape[0]]
+            # underlying object: [gid=uint64, step=int64, offset=double, values....][shape[0]]
             # Length of row: shape[1]
-            cdef size_t rows = self.entry.rows
+            cdef size_t rows   = self.entry.rows
             cdef size_t values = self.entry.values
-            cdef char* data = self.entry.get_data()
-            cdef str dtype = "=Q=q=d={}d".format(values)
-            cdef tuple dim = (rows,)
-            cdef cvarray buf = cvarray(data, shape=dim, dtype=dtype)
+            cdef char*  data   = self.entry.get_data()
+            
+            cdef str     dtype = "=Q=q=d={}d".format(values)
+            cdef tuple   dim   = (rows,)
+            cdef cvarray buf   = cvarray(data, shape=dim, dtype=dtype)
 
             return DevArray(buf, self, dtype)
 
