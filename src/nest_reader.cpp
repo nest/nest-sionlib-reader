@@ -28,8 +28,9 @@ NestReader::NestReader(const std::string& filename)
   resolution = reader.read<double>();
 
   auto n_dev = reader.read<sion_uint64>();
-  for (size_t i = 0; i < n_dev; ++i)
+  for (size_t i = 0; i < n_dev; ++i) {
     read_next_device(reader);
+  }
 
   for (int rank = 0; rank < reader.get_ranks(); ++rank)
   {
@@ -38,8 +39,9 @@ NestReader::NestReader(const std::string& filename)
       reader.get_current_location(&info_blk, &info_pos);
     }
     SIONRankReader rreader(&reader, rank, info_blk, info_pos);
-    while (! rreader.eof())
+    while (! rreader.eof()) {
       read_next_values(rreader);
+    }
   }
 }
 
@@ -90,8 +92,7 @@ void NestReader::read_next_values(SIONRankReader& treader) {
 DeviceData* NestReader::get_device_data(uint64_t device_gid)
 {
     auto tmp = data.find(device_gid);
-    if(tmp == data.end())
-    {
+    if (tmp == data.end()) {
       std::stringstream msg;
       msg << "unknown device gid #" << device_gid;
       throw std::out_of_range(msg.str());

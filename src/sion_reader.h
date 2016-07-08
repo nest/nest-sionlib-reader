@@ -56,7 +56,7 @@ public:
   
   void seek(int rank, sion_int64 blk = 0, sion_int64 pos = 0);
   sion_int64 get_size(int rank, sion_int64 blk) {
-    return chunk_sizes[n_ranks * blk + rank];
+    return blk_sizes[n_ranks * blk + rank];
   }
   void get_current_location(sion_int64* blk, sion_int64* pos);
   int get_ranks() {return n_ranks;};
@@ -96,7 +96,7 @@ public:
 
 protected:
   struct SIONFile {
-    int sid; int n_ranks; sion_int64* chunk_sizes;
+    int sid; int n_ranks; sion_int64* blk_sizes;
     SIONFile(const std::string& filename);
   };
   SIONReader(const SIONFile&);
@@ -106,7 +106,7 @@ protected:
 private:
   int sid;
   int n_ranks;
-  sion_int64* chunk_sizes;
+  sion_int64* blk_sizes;
   SIONEndian swapper;
 };
 

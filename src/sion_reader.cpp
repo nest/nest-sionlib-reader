@@ -29,18 +29,37 @@ SIONReader::SIONFile::SIONFile(const std::string& filename)
   // throw aways for interface
   int n_files;
   sion_int32 fs_block_size;
-
-  chunk_sizes = nullptr;
+  
+  int max_chunks;
+  sion_int64 global_skip;
+  sion_int64 start_of_varheader;
+  sion_int64 *chunk_sizes;
+  sion_int64 *global_ranks;
+  sion_int64 *block_count;
+		       
   sid = sion_open((char*) filename.c_str(),
 		  "rb",
 		  &n_ranks,
 		  &n_files,
-		  &chunk_sizes,
+		  nullptr,
 		  &fs_block_size,
 		  nullptr,
 		  nullptr);
   if (sid == -1)
     throw sion_error(std::string("sion_open: ") + filename);
+
+  // set n_ranks, blk_sizes
+  if (sion_get_locations(sid,
+			 &n_ranks,
+			 &max_chunks,
+			 &global_skip,
+			 &start_of_varheader,
+			 &chunk_sizes,
+			 &global_ranks,
+			 &block_count,
+			 &blk_sizes)
+      != SION_SUCCESS)
+    throw sion_error(std::string("sion_get_locations: ") + filename);
 }
 
 SIONReader::SIONReader(const std::string& filename)
@@ -50,14 +69,13 @@ SIONReader::SIONReader(const std::string& filename)
 SIONReader::SIONReader(const SIONFile& file)
   : sid(file.sid)
   , n_ranks(file.n_ranks)
-  , chunk_sizes(file.chunk_sizes)
+  , blk_sizes(file.blk_sizes)
   , swapper(sion_endianness_swap_needed(sid))
 {};
 
 SIONReader::~SIONReader() {
   if (sion_close(sid) != SION_SUCCESS)
     throw sion_error("sion_close");
-  free(chunk_sizes);
 }
 
 void SIONReader::seek(int rank, sion_int64 blk, sion_int64 pos) {
@@ -120,19 +138,17 @@ void SIONRankReader::fetch_chunk()
 
 void SIONRankReader::readbuf(char* data, size_t size)
 {
-  auto npos = pos;
-  while (true)
+  while (size)
   {
     size_t len = buffer.end()-pos;
     size_t available = std::min(size, len);
     size -= available;
 
-    npos += available;
-    std::copy(pos, npos, data);
-    pos = npos;
+    auto next_pos = pos + available;
+    std::copy(pos, next_pos, data);
+    pos = next_pos;
     data += available;
 
-    if (! size) break;
-    fetch_chunk();
+    if (size) fetch_chunk();
   }
 }
