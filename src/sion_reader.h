@@ -6,6 +6,7 @@
 #include <utility>
 #include <string>
 #include <vector>
+#include <algorithm>
 
 #include "sion.h"
 
