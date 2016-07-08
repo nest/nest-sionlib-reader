@@ -23,23 +23,23 @@ NestReader::NestReader(const std::string& filename)
   // read info section for task 0
   reader.seek(0, info_blk, info_pos);
 
-  t_start  = reader.read<double>();
-  t_end    = reader.read<double>();
-  duration = reader.read<double>();
+  t_start    = reader.read<double>();
+  t_end      = reader.read<double>();
+  resolution = reader.read<double>();
 
   auto n_dev = reader.read<sion_uint64>();
   for (size_t i = 0; i < n_dev; ++i)
     read_next_device(reader);
 
-  for (int task = 0; task < reader.get_tasks(); ++task)
+  for (int rank = 0; rank < reader.get_ranks(); ++rank)
   {
-    if (task) { // task > 0, end is just the END_POS
-      reader.seek(task, SION_END_POS);
+    if (rank) { // rank > 0, end is just the END_POS
+      reader.seek(rank, SION_END_POS);
       reader.get_current_location(&info_blk, &info_pos);
     }
-    SIONTaskReader treader(reader, task, info_blk, info_pos);
-    while (! treader.eof())
-      read_next_values(treader);
+    SIONRankReader rreader(&reader, rank, info_blk, info_pos);
+    while (! rreader.eof())
+      read_next_values(rreader);
   }
 }
 
@@ -73,7 +73,7 @@ void NestReader::read_next_device(SIONReader& reader)
   entry.observables = observables;
 }
 
-void NestReader::read_next_values(SIONTaskReader& treader) {
+void NestReader::read_next_values(SIONRankReader& treader) {
   auto device_gid = treader.read<sion_uint64>();
   auto neuron_gid = treader.read<sion_uint64>();
   auto step       = treader.read<sion_int64>();

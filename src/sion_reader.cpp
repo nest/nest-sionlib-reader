@@ -4,6 +4,7 @@
 #include <string>
 #include <sstream>
 #include <algorithm>
+#include <iostream>
 
 class sion_error: public std::runtime_error {
 public:
@@ -15,7 +16,7 @@ public:
 void SIONReader::get_current_location(sion_int64* blk, sion_int64* pos) {
   int lblk; // interface mismatch in sionlib api
   int maxchunks;
-  sion_int64* chunksizes;
+  sion_int64* chunksizes = nullptr;
   
   if (sion_get_current_location(sid, &lblk, pos, &maxchunks, &chunksizes)
       != SION_SUCCESS)
@@ -28,17 +29,16 @@ SIONReader::SIONFile::SIONFile(const std::string& filename)
   // throw aways for interface
   int n_files;
   sion_int32 fs_block_size;
-  int* ranks;
-  FILE* fh;
 
+  chunk_sizes = nullptr;
   sid = sion_open((char*) filename.c_str(),
 		  "rb",
-		  &n_tasks,
+		  &n_ranks,
 		  &n_files,
 		  &chunk_sizes,
 		  &fs_block_size,
-		  &ranks,
-		  &fh);
+		  nullptr,
+		  nullptr);
   if (sid == -1)
     throw sion_error(std::string("sion_open: ") + filename);
 }
@@ -49,7 +49,7 @@ SIONReader::SIONReader(const std::string& filename)
 
 SIONReader::SIONReader(const SIONFile& file)
   : sid(file.sid)
-  , n_tasks(file.n_tasks)
+  , n_ranks(file.n_ranks)
   , chunk_sizes(file.chunk_sizes)
   , swapper(sion_endianness_swap_needed(sid))
 {};
@@ -57,70 +57,82 @@ SIONReader::SIONReader(const SIONFile& file)
 SIONReader::~SIONReader() {
   if (sion_close(sid) != SION_SUCCESS)
     throw sion_error("sion_close");
+  free(chunk_sizes);
 }
 
-void SIONReader::seek(int rank, size_t chunk, size_t pos) {
-  if (sion_seek(sid, rank, chunk, pos) != SION_SUCCESS) {
+void SIONReader::seek(int rank, sion_int64 blk, sion_int64 pos) {
+  if (sion_seek(sid, rank, blk, pos) != SION_SUCCESS) {
     std::stringstream msg;
     msg << "sion_seek:"
 	<< " rank=" << rank
-	<< " chunk=" << chunk
+	<< " blk=" << blk
 	<< " pos=" << pos;
     throw sion_error(msg.str());
   }
 }
 
-SIONTaskReader::SIONTaskReader(SIONReader& reader,
-			       int task,
-			       sion_int64 eof_chunk,
+void SIONReader::fread(char* data, size_t size, size_t nitems) {
+  size_t r = sion_fread(data, size, nitems, sid);
+  if (r < nitems) {
+    std::stringstream msg;
+    msg << "sion_fread:"
+	<< " r=" << r
+	<< " size=" << size
+	<< " nitems=" << nitems;
+    throw sion_error(msg.str());
+  }
+}
+
+SIONRankReader::SIONRankReader(SIONReader* reader,
+			       int rank,
+			       sion_int64 eof_blk,
 			       sion_int64 eof_pos)
   : reader(reader)
-  , task(task)
-  , chunk(0)
-  , chunk_size(0)
-  , buffer(NULL)
-  , buffer_size(0)
-  , start(NULL)
-  , end(NULL)
-  , eof_chunk(eof_chunk)
+  , rank(rank)
+  , blk(0)
+  , buffer(0)
+  , pos(nullptr)
+  , eof_blk(eof_blk)
   , eof_pos(eof_pos)
 {
-  fetch_chunk(0);
+  fetch_chunk();
 }
 
-SIONTaskReader::~SIONTaskReader()
+void SIONRankReader::fetch_chunk()
 {
-  delete [] buffer;
-}
-
-void SIONTaskReader::fetch_chunk(int chunk_)
-{
-  chunk = chunk_;
-  reader.seek(task, chunk, 0);
-  chunk_size = reader.get_size(task, chunk);
-  
-  if (static_cast<size_t>(chunk_size) > buffer_size) {
-    delete [] buffer;
-    buffer = new char[chunk_size];
-    buffer_size = chunk_size;
+  if (blk > eof_blk) {
+    std::stringstream msg;
+    msg << "fetch_chunk overflow: "
+	<< "blk=" << blk << " "
+	<< "eof_blk=" << eof_blk;
+    throw std::out_of_range(msg.str());
   }
+  reader->seek(rank, blk, 0);
   
-  start = buffer;
-  end = buffer + chunk_size;
-  reader.read(buffer, chunk_size);
+  size_t chunk_size = (blk == eof_blk)
+    ? eof_pos : reader->get_size(rank, blk);
+  buffer.resize(chunk_size);
+  
+  pos = buffer.begin();
+  reader->read(&buffer[0], chunk_size);
+  blk += 1;
 }
 
-void SIONTaskReader::readbuf(char* data, size_t size) {
-  size_t copied = std::min(size, static_cast<size_t>(end-start));
-  size_t remaining = size - copied;
-
-  std::memcpy(data, start, copied);
-  start += copied;
-  
-  if (remaining > 0)
+void SIONRankReader::readbuf(char* data, size_t size)
+{
+  auto npos = pos;
+  while (true)
   {
-    fetch_chunk(chunk + 1);
-    std::memcpy(data + copied, start, remaining);
-    start += remaining;
+    size_t len = buffer.end()-pos;
+    size_t available = std::min(size, len);
+    size -= available;
+
+    npos += available;
+    std::copy(pos, npos, data);
+    pos = npos;
+    data += available;
+
+    if (! size) break;
+    fetch_chunk();
   }
 }

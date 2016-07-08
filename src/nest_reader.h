@@ -51,11 +51,11 @@ public:
 
   double get_start() {return t_start;};
   double get_end() {return t_end;};
-  double get_duration() {return duration;};
+  double get_resolution() {return resolution;};
 
 protected:
   void read_next_device(SIONReader&);
-  void read_next_values(SIONTaskReader&);
+  void read_next_values(SIONRankReader&);
 
 private:
   std::map<uint64_t, DeviceData> data;
@@ -67,7 +67,7 @@ private:
 
   double t_start;
   double t_end;
-  double duration;
+  double resolution;
 };
 
 #endif // NESTIO_H

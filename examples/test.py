@@ -1,8 +1,10 @@
+#!/usr/bin/python3
+
 import nest
 
-nest.SetKernelStatus({"local_num_threads": 2, "resolution": .5, 'recording': {'logger': 'SIONLogger'}})
+nest.SetKernelStatus({"local_num_threads": 4, "resolution": .5, 'recording': {'logger': 'SIONLogger'}})
 
-nrns = nest.Create('iaf_psc_alpha', 4)
+nrns = nest.Create('iaf_psc_alpha', 16)
 
 nest.SetStatus(nrns, 'I_e', 1000.)
 

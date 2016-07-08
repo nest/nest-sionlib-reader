@@ -5,6 +5,7 @@
 #include <type_traits>
 #include <utility>
 #include <string>
+#include <vector>
 
 #include "sion.h"
 
@@ -53,19 +54,28 @@ public:
   SIONReader(const std::string& filename);
   ~SIONReader();
   
-  void seek(int rank, size_t chunk = 0, size_t pos = 0);
-  sion_int64 get_size(int task, size_t chunk) {
-    return chunk_sizes[n_tasks * chunk + task];
+  void seek(int rank, sion_int64 blk = 0, sion_int64 pos = 0);
+  sion_int64 get_size(int rank, sion_int64 blk) {
+    return chunk_sizes[n_ranks * blk + rank];
   }
   void get_current_location(sion_int64* blk, sion_int64* pos);
-  int get_tasks() {return n_tasks;};
+  int get_ranks() {return n_ranks;};
 
   template<typename T>
-  size_t read(T data, size_t nitems = 1) {
-    size_t r = sion_fread(data, sizeof(T[0]), nitems, sid);
+  using is_pointer = typename std::enable_if<std::is_pointer<T>::value>::type;
+
+  template<typename T, typename = is_pointer<T> >
+  void read(T data, size_t nitems = 1) {
+    fread(reinterpret_cast<char*>(data),
+	  sizeof(data[0]),
+	  nitems);
     swapper.swap(data, nitems);
-    return r;
   };
+
+  template<typename T, size_t nitems>
+  void read(T (&data)[nitems]) {
+    return read(data, nitems);
+  }
 
   template<typename T>
   T read() {
@@ -86,35 +96,33 @@ public:
 
 protected:
   struct SIONFile {
-    int sid; int n_tasks; sion_int64* chunk_sizes;
+    int sid; int n_ranks; sion_int64* chunk_sizes;
     SIONFile(const std::string& filename);
   };
   SIONReader(const SIONFile&);
 
+  void fread(char* data, size_t size, size_t nitems);
+
 private:
   int sid;
-  int n_tasks;
+  int n_ranks;
   sion_int64* chunk_sizes;
   SIONEndian swapper;
 };
 
-class SIONTaskReader {
+class SIONRankReader {
 public:
-  SIONTaskReader(SIONReader&, int task, sion_int64 eof_chunk, sion_int64 eof_pos);
-  ~SIONTaskReader();
-  
-  sion_int64 get_size() {return chunk_size;};
-  sion_int64 get_chunk() {return chunk;};
+  SIONRankReader(SIONReader*, int rank, sion_int64 eof_blk, sion_int64 eof_pos);
 
   bool eof() const {
-    return chunk > eof_chunk
-      || (chunk == eof_chunk && end-start > eof_pos);
+    return blk-1 == eof_blk
+      && pos-buffer.begin() == eof_pos;
   }
 
   template<typename T>
   void read(T data, size_t nitems = 1) {
     readbuf(data, nitems);
-    reader.swap(data, nitems);
+    reader->swap(data, nitems);
   }
 
   template<typename T>
@@ -131,20 +139,17 @@ protected:
   void readbuf(char* data, size_t size);
   
 private:
-  void fetch_chunk(int chunk);
+  void fetch_chunk();
 
-  SIONReader reader;
+  SIONReader* reader;
   
-  sion_int64 task;
-  sion_int64 chunk;
-  sion_int64 chunk_size;
+  sion_int64 rank;
+  sion_int64 blk;
 
-  char* buffer;
-  size_t buffer_size;
-  char* start;
-  char* end;
+  std::vector<char> buffer;
+  std::vector<char>::iterator pos;
 
-  sion_int64 eof_chunk;
+  sion_int64 eof_blk;
   sion_int64 eof_pos;
 };
 

@@ -1,10 +1,8 @@
 from libcpp.vector cimport vector
 from libcpp.string cimport string
-from libc.stdint cimport uint64_t, uint32_t
+from libc.stdint cimport uint64_t, uint32_t, int64_t
 
-import numpy as np
-cimport numpy as np
-from cython.view cimport array as cvarray
+from cpython cimport Py_buffer
 
 cdef extern from "nest_reader.h":
     cdef cppclass CDeviceData "DeviceData":
@@ -29,22 +27,15 @@ cdef extern from "nest_reader.h":
 
         double get_start() except +
         double get_end() except +
-        double get_duration() except +
-
-class DevArray(np.ndarray):
-    # need to keep a reference to the DeviceData object
-    def __new__(cls, view, device, dtype):
-        obj = np.asarray(view, dtype=dtype).view(cls)
-        obj.device = device
-        return obj
-
-    def __array_finalize__(self, obj):
-        if obj is None: return
-        self.device = getattr(obj, 'device', None)
+        double get_resolution() except +
 
 cdef class DeviceData:
     cdef CDeviceData* entry
     cdef NestReader nest_reader # keep a reference for the parent
+
+    cdef bytes format
+    cdef Py_ssize_t shape[1]
+    cdef Py_ssize_t strides[1]
 
     def __cinit__(self, uint64_t gid, NestReader nest_reader):
         self.entry = nest_reader.reader.get_device_data(gid)
@@ -52,21 +43,6 @@ cdef class DeviceData:
 
     def __dealloc__(self):
         self.nest_reader = None
-
-    property data:
-        def __get__(self):
-            # underlying object: [gid=uint64, step=int64, offset=double, values....][shape[0]]
-            # Length of row: shape[1]
-            cdef:
-                size_t rows   = self.entry.rows
-                size_t values = self.entry.values
-                char*  data   = self.entry.get_data()
-            
-                str     dtype = "=Q=q=d={}d".format(values)
-                tuple   dim   = (rows,)
-                cvarray buf   = cvarray(data, shape=dim, dtype=dtype)
-
-            return DevArray(buf, self, dtype)
 
     property gid:
         def __get__(self):
@@ -88,10 +64,52 @@ cdef class DeviceData:
         def __get__(self):
             return <list> self.entry.observables
 
+    property rows:
+        def __get__(self):
+            return self.entry.rows
+
+    property values:
+        def __get__(self):
+            return self.entry.values
+
+    def __getbuffer__(self, Py_buffer* buffer, int flags):
+        try: self.getbuffer_(buffer, flags)
+        except Exception as e:
+            print(e)
+            raise
+
+    cdef getbuffer_(self, Py_buffer* buffer, int flags):
+        # underlying object: [gid=uint64, step=int64, offset=double, values....][shape[0]]
+        # Length of row: shape[1]
+        cdef:
+            size_t rows   = self.entry.rows
+            size_t values = self.entry.values
+            Py_ssize_t itemsize = sizeof(uint64_t) + sizeof(int64_t) + sizeof(double) + values*sizeof(double)
+
+        self.strides[0] = itemsize
+        self.shape[0] = rows
+        self.format = "=Q=q=d".encode()
+        if values > 0: self.format += "={}d".format(values).encode()
+
+        buffer.buf = self.entry.get_data()
+        buffer.format = <char*> self.format
+        buffer.internal = NULL
+        buffer.itemsize = itemsize
+        buffer.len = itemsize * rows
+        buffer.ndim = 1
+        buffer.obj = self
+        buffer.readonly = 0
+        buffer.shape = self.shape
+        buffer.strides = self.strides
+        buffer.suboffsets = NULL
+
+    def __releasebuffer__(self, Py_buffer* buffer):
+        self.format = None
+
 cdef class NestReader:
     cdef CNestReader* reader
-    def __init__(self, filename):
-        self.reader = new CNestReader(filename)
+    def __cinit__(self, str filename):
+        self.reader = new CNestReader(filename.encode())
 
     def __dealloc__(self):
         del self.reader
@@ -116,6 +134,6 @@ cdef class NestReader:
         def __get__(self):
             return self.reader.get_end()
 
-    property duration:
+    property resolution:
         def __get__(self):
-            return self.reader.get_duration()
+            return self.reader.get_resolution()
