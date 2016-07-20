@@ -10,18 +10,15 @@
 class RawMemory
 {
 private:
-  typedef std::vector<char> vbuf;
-  std::shared_ptr<vbuf> sbuf;
+  std::vector<char> sbuf;
 
-public:
   char* const buffer;
-
-private:
   char* start;
   char* const end;
 
 public:
   RawMemory(size_t size);
+  RawMemory(const RawMemory&) = delete;
   
   void write(const char* v, size_t n = 1);
   
@@ -30,6 +27,8 @@ public:
 
   template<typename T>
   T* get_region(size_t n);
+
+  char* get_buffer() {return buffer;};
 };
 
 template<typename T>

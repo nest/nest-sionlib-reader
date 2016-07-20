@@ -101,17 +101,15 @@ void SIONReader::fread(char* data, size_t size, size_t nitems) {
   }
 }
 
-SIONRankReader::SIONRankReader(SIONReader* reader,
-			       int rank,
-			       sion_int64 eof_blk,
-			       sion_int64 eof_pos)
+SIONRankReader::SIONRankReader(SIONReader* reader, const
+			       SIONPos& v)
   : reader(reader)
-  , rank(rank)
+  , rank(v.rank)
   , blk(0)
   , buffer(0)
   , pos(nullptr)
-  , eof_blk(eof_blk)
-  , eof_pos(eof_pos)
+  , eof_blk(v.blk)
+  , eof_pos(v.pos)
 {
   fetch_chunk();
 }

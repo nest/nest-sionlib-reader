@@ -7,6 +7,7 @@
 #include <string>
 #include <vector>
 #include <algorithm>
+#include <memory>
 
 #include "sion.h"
 
@@ -49,6 +50,8 @@ private:
   const bool do_swap;
 };
 
+class SIONRankReader;
+
 class SIONReader
 {
 public:
@@ -61,6 +64,18 @@ public:
   }
   void get_current_location(sion_int64* blk, sion_int64* pos);
   int get_ranks() {return n_ranks;};
+
+  // aggregate params for SIONRankReader()
+  struct SIONPos {
+    int rank;
+    sion_int64 blk;
+    sion_int64 pos;
+  };
+
+  // SIONRankReader factory
+  inline
+  std::unique_ptr<SIONRankReader>
+  make_rank_reader(const SIONPos&);
 
   template<typename T>
   using is_pointer = typename std::enable_if<std::is_pointer<T>::value>::type;
@@ -76,7 +91,7 @@ public:
   template<typename T, size_t nitems>
   void read(T (&data)[nitems]) {
     return read(data, nitems);
-  }
+  };
 
   template<typename T>
   T read() {
@@ -113,7 +128,9 @@ private:
 
 class SIONRankReader {
 public:
-  SIONRankReader(SIONReader*, int rank, sion_int64 eof_blk, sion_int64 eof_pos);
+  using SIONPos = SIONReader::SIONPos;
+
+  SIONRankReader(SIONReader*, const SIONPos&);
 
   bool eof() const {
     return blk-1 == eof_blk
@@ -152,6 +169,11 @@ private:
 
   sion_int64 eof_blk;
   sion_int64 eof_pos;
+};
+
+std::unique_ptr<SIONRankReader>
+SIONReader::make_rank_reader(const SIONPos& v) {
+  return std::unique_ptr<SIONRankReader>(new SIONRankReader(this, v));
 };
 
 #endif // SION_READER_H

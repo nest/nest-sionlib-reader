@@ -3,8 +3,8 @@
 #include "raw_memory.h"
 
 RawMemory::RawMemory(size_t size)
-  : sbuf(std::make_shared<vbuf>(size))
-  , buffer(&(*sbuf.get())[0])
+  : sbuf(size)
+  , buffer(&sbuf[0])
   , start(buffer)
   , end(buffer+size)
 {}

@@ -6,9 +6,7 @@ from cpython cimport Py_buffer
 
 cdef extern from "nest_reader.h":
     cdef cppclass CDeviceData "DeviceData":
-        CDeviceData(size_t, size_t) except +
-
-        char* get_data() except +
+        char* get_raw() except +
 
         uint64_t gid;
         uint32_t type;
@@ -22,7 +20,7 @@ cdef extern from "nest_reader.h":
     cdef cppclass CNestReader "NestReader":
         CNestReader(string) except +
 
-        CDeviceData* get_device_data(uint64_t) except +
+        CDeviceData* get_device_data_ptr(uint64_t) except +
         vector[uint64_t] list_devices()
 
         double get_start() except +
@@ -38,7 +36,7 @@ cdef class DeviceData:
     cdef Py_ssize_t strides[1]
 
     def __cinit__(self, uint64_t gid, NestReader nest_reader):
-        self.entry = nest_reader.reader.get_device_data(gid)
+        self.entry = nest_reader.reader.get_device_data_ptr(gid)
         self.nest_reader = nest_reader
 
     def __dealloc__(self):
@@ -91,7 +89,7 @@ cdef class DeviceData:
         self.format = "=Q=q=d".encode()
         if values > 0: self.format += "={}d".format(values).encode()
 
-        buffer.buf = self.entry.get_data()
+        buffer.buf = self.entry.get_raw()
         buffer.format = <char*> self.format
         buffer.internal = NULL
         buffer.itemsize = itemsize

@@ -10,6 +10,7 @@
 #include <string>
 #include <map>
 #include <utility>
+#include <memory>
 
 #include "sion.h"
 
@@ -20,15 +21,19 @@
 struct DeviceData
 {
   DeviceData(size_t rows, size_t values)
-    : data(rows * (sizeof(uint64_t)
+    : raw(std::make_shared<RawMemory>
+	  (rows * (sizeof(uint64_t)
 		   + sizeof(int64_t)
 		   + sizeof(double)
 		   + values * sizeof(double)))
+	  )
     , rows(rows)
     , values(values)
-  {}
+  {};
 
-  char* get_data() {return data.buffer;};
+  char* get_raw() {return raw->get_buffer();};
+
+  std::shared_ptr<RawMemory> raw;
 
   uint64_t gid;
   uint32_t type;
@@ -36,7 +41,6 @@ struct DeviceData
   std::string label;
   std::vector<std::string> observables;
 
-  RawMemory data;
   size_t rows;
   size_t values;
 };
@@ -46,7 +50,10 @@ class NestReader
 public:
   NestReader(const std::string& filename);
   
-  DeviceData* get_device_data(uint64_t device_gid);
+  DeviceData& get_device_data(uint64_t device_gid);
+  DeviceData* get_device_data_ptr(uint64_t device_gid) {
+    return &get_device_data(device_gid);
+  };
   std::vector<uint64_t> list_devices();
 
   double get_start() {return t_start;};
@@ -54,8 +61,8 @@ public:
   double get_resolution() {return resolution;};
 
 protected:
-  void read_next_device(SIONReader&);
-  void read_next_values(SIONRankReader&);
+  void read_devices(SIONReader&);
+  void read_values(SIONReader&, const SIONRankReader::SIONPos&);
 
 private:
   std::map<uint64_t, DeviceData> data;
