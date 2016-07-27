@@ -56,7 +56,7 @@ cdef class DeviceData:
 
     property label:
         def __get__(self):
-            return self.entry.name
+            return self.entry.label
 
     property observables:
         def __get__(self):
