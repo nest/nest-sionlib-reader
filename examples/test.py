@@ -2,7 +2,7 @@
 
 import nest
 
-nest.SetKernelStatus({"local_num_threads": 4, "resolution": .5, 'recording': {'logger': 'SIONLogger'}})
+nest.SetKernelStatus({"local_num_threads": 4, "resolution": .5, 'recording': {'recording_backend': 'RecordingBackendSIONlib'}})
 
 nrns = nest.Create('iaf_psc_alpha', 16)
 
