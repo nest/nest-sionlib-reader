@@ -1,3 +1,5 @@
+# Achilleas Koutsou <achilleas.k@gmail.com>
+
 import neo
 from neo import NixIO
 
