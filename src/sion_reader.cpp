@@ -73,7 +73,7 @@ SIONReader::SIONReader(const SIONFile& file)
   , swapper(sion_endianness_swap_needed(sid))
 {};
 
-SIONReader::~SIONReader() {
+SIONReader::~SIONReader() noexcept(false) {
   if (sion_close(sid) != SION_SUCCESS)
     throw sion_error("sion_close");
 }

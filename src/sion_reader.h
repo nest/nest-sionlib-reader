@@ -56,8 +56,7 @@ class SIONReader
 {
 public:
   SIONReader(const std::string& filename);
-  ~SIONReader();
-  
+  ~SIONReader() noexcept(false);
   void seek(int rank, sion_int64 blk = 0, sion_int64 pos = 0);
   sion_int64 get_size(int rank, sion_int64 blk) {
     return blk_sizes[n_ranks * blk + rank];
