@@ -1,6 +1,7 @@
 #ifndef SION_READER_H
 #define SION_READER_H
 
+#include <algorithm>
 #include <cstring>
 
 #include "sion.h"

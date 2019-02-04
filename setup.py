@@ -11,10 +11,12 @@ from subprocess import Popen, PIPE
 proc = Popen('sionconfig --cflags --gcc --ser'.split(), stdout=PIPE)
 proc.wait()
 CFLAGS = proc.communicate()[0].strip().split()
+CFLAGS = [s.decode("ASCII") for s in CFLAGS]
 
 proc = Popen('sionconfig --libs --gcc --ser'.split(), stdout=PIPE)
 proc.wait()
 LDFLAGS = proc.communicate()[0].strip().split()
+LDFLAGS = [s.decode("ASCII") for s in LDFLAGS]
 
 setup(
     name="nestio",
