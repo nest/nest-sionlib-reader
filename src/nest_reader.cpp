@@ -26,7 +26,10 @@ NestReader::NestReader(const std::string& filename)
   t_start    = reader.read<double>();
   t_end      = reader.read<double>();
   resolution = reader.read<double>();
-  //TODO: Additional reads for version info
+  sionlib_rec_backend_version = reader.read<sion_int32>();
+  char nest_version_buffer[128];
+  reader.read(nest_version_buffer);
+  nest_version = nest_version_buffer;
 
   read_devices(reader);
 
@@ -53,26 +56,39 @@ void NestReader::read_devices(SIONReader& reader)
     reader.read(name);
     reader.read(label);
     
+    auto origin = reader.read<sion_int64>();
+    auto t_start = reader.read<sion_int64>();
+    auto t_stop = reader.read<sion_int64>();
     auto n_rec = reader.read<sion_uint64>();
-    auto n_val = reader.read<sion_uint32>();
-    //TODO: Read two n_val's
-    
-    //TODO: Separate loops for double and long
-    std::vector<std::string> observables;
-    for (size_t j = 0; j < n_val; ++j)
+    auto double_n_val = reader.read<sion_uint32>();
+    auto long_n_val = reader.read<sion_uint32>();
+
+    std::vector<std::string> double_observables;
+    for (size_t j = 0; j < double_n_val; ++j)
     {
       char ob_name[8];
       reader.read(ob_name);
-      observables.push_back(ob_name);
+      double_observables.push_back(ob_name);
+    }
+    std::vector<std::string> long_observables;
+    for (size_t j = 0; j < long_n_val; ++j)
+    {
+      char ob_name[8];
+      reader.read(ob_name);
+      long_observables.push_back(ob_name);
     }
 
-    DeviceData& entry = add_entry(dev_id, n_rec, n_val);
+    DeviceData& entry = add_entry(dev_id, n_rec, double_n_val, long_n_val);
 
     entry.gid = dev_id;
     entry.type = type;
     entry.name = name;
     entry.label = label;
-    entry.observables = observables;
+    entry.origin = origin;
+    entry.t_start = t_start;
+    entry.t_stop = t_stop;
+    entry.double_observables = double_observables;
+    entry.long_observables = long_observables;
   }
 }
 
@@ -81,19 +97,20 @@ void NestReader::read_values(SIONReader& reader, const SIONRankReader::SIONPos& 
   auto rank_ptr = reader.make_rank_reader(v);
 
   while (! rank_ptr->eof()) {
-    auto device_gid = rank_ptr->read<sion_uint64>();
-    auto neuron_gid = rank_ptr->read<sion_uint64>();
-    auto step       = rank_ptr->read<sion_int64>();
-    auto offset     = rank_ptr->read<double>();
-    auto n_values   = rank_ptr->read<sion_uint32>();
-    //TODO: Two n_values instead of one
+    auto device_gid   = rank_ptr->read<sion_uint64>();
+    auto neuron_gid   = rank_ptr->read<sion_uint64>();
+    auto step         = rank_ptr->read<sion_int64>();
+    auto offset       = rank_ptr->read<double>();
+    auto double_n_val = rank_ptr->read<sion_uint32>();
+    auto long_n_val   = rank_ptr->read<sion_uint32>();
 
     RawMemory& buffer = *data.find(device_gid)->second.raw;
     buffer << neuron_gid << step << offset;
 
-    //TODO: Get long values
-    auto subbuf = buffer.get_region<double>(n_values);
-    rank_ptr->read(subbuf, n_values);
+    auto double_subbuf = buffer.get_region<double>(double_n_val);
+    rank_ptr->read(double_subbuf, double_n_val);
+    auto long_subbuf = buffer.get_region<long>(long_n_val);
+    rank_ptr->read(long_subbuf, long_n_val);
   }
 }
 
