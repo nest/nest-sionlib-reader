@@ -26,9 +26,11 @@ NestReader::NestReader(const std::string& filename)
   t_start    = reader.read<double>();
   t_end      = reader.read<double>();
   resolution = reader.read<double>();
+  //TODO: Additional reads for version info
 
   read_devices(reader);
 
+  //TODO: Use better variable names for info_XXX
   for (int rank = 0; rank < reader.get_ranks(); ++rank)
   {
     if (rank) { // rank > 0, end is just the END_POS
@@ -53,7 +55,9 @@ void NestReader::read_devices(SIONReader& reader)
     
     auto n_rec = reader.read<sion_uint64>();
     auto n_val = reader.read<sion_uint32>();
+    //TODO: Read two n_val's
     
+    //TODO: Separate loops for double and long
     std::vector<std::string> observables;
     for (size_t j = 0; j < n_val; ++j)
     {
@@ -82,10 +86,12 @@ void NestReader::read_values(SIONReader& reader, const SIONRankReader::SIONPos& 
     auto step       = rank_ptr->read<sion_int64>();
     auto offset     = rank_ptr->read<double>();
     auto n_values   = rank_ptr->read<sion_uint32>();
+    //TODO: Two n_values instead of one
 
     RawMemory& buffer = *data.find(device_gid)->second.raw;
     buffer << neuron_gid << step << offset;
 
+    //TODO: Get long values
     auto subbuf = buffer.get_region<double>(n_values);
     rank_ptr->read(subbuf, n_values);
   }

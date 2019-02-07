@@ -20,6 +20,8 @@
 
 struct DeviceData
 {
+  //TODO: Take measures for two separate lists
+  //TODO: Rename parameters rows and values
   DeviceData(size_t rows, size_t values)
     : raw(std::make_shared<RawMemory>
 	  (rows * (sizeof(uint64_t)
@@ -34,15 +36,18 @@ struct DeviceData
   char* get_raw() {return raw->get_buffer();};
 
   std::shared_ptr<RawMemory> raw;
+  //TODO: Maybe two buffers
 
   uint64_t gid;
   uint32_t type;
   std::string name;
   std::string label;
   std::vector<std::string> observables;
+  //TODO: Separate lists
 
   size_t rows;
   size_t values;
+  //TODO: Renaming and two values
 };
 
 class NestReader
@@ -59,6 +64,7 @@ public:
   double get_start() {return t_start;};
   double get_end() {return t_end;};
   double get_resolution() {return resolution;};
+  // TODO: Add getters for sionlib-rec.backend-version and nest version
 
 protected:
   void read_devices(SIONReader&);
@@ -66,6 +72,7 @@ protected:
 
 private:
   std::map<uint64_t, DeviceData> data;
+  //TODO: Split n_val into two
   DeviceData& add_entry(uint64_t dev_id, size_t n_rec, size_t n_val) {
     return data
       .insert(std::make_pair(dev_id, DeviceData(n_rec, n_val)))
@@ -75,6 +82,8 @@ private:
   double t_start;
   double t_end;
   double resolution;
+
+  //TODO: Add attributes for versions
 };
 
 #endif // NESTIO_H

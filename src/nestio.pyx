@@ -66,7 +66,7 @@ cdef class DeviceData:
         def __get__(self):
             return self.entry.rows
 
-    property values:
+    property values: #TODO
         def __get__(self):
             return self.entry.values
 
@@ -79,15 +79,18 @@ cdef class DeviceData:
     cdef getbuffer_(self, Py_buffer* buffer, int flags):
         # underlying object: [gid=uint64, step=int64, offset=double, values....][shape[0]]
         # Length of row: shape[1]
+        #TODO: Change buffer meta information
         cdef:
             size_t rows   = self.entry.rows
-            size_t values = self.entry.values
+            size_t values = self.entry.values #TODO: For long and double
             Py_ssize_t itemsize = sizeof(uint64_t) + sizeof(int64_t) + sizeof(double) + values*sizeof(double)
+        #TODO: Change computation of itemsize
 
         self.strides[0] = itemsize
         self.shape[0] = rows
         self.format = "=Q=q=d".encode()
         if values > 0: self.format += "={}d".format(values).encode()
+        #TODO: self.format += "={}q".format(num_long_values).encode()
 
         buffer.buf = self.entry.get_raw()
         buffer.format = <char*> self.format
