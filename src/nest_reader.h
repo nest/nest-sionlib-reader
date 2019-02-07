@@ -54,6 +54,15 @@ DeviceData(size_t rows, size_t double_n_val, size_t long_n_val)
 
 class NestReader
 {
+  static const unsigned int MIN_SUPPORTED_SIONLIB_CONTAINER_FORMAT;
+  static const unsigned int MAX_SUPPORTED_SIONLIB_CONTAINER_FORMAT;
+
+  // version 2 buffer sizes
+  const static unsigned int V2_DEV_NAME_BUFFERSIZE;
+  const static unsigned int V2_DEV_LABEL_BUFFERSIZE;
+  const static unsigned int V2_VALUE_NAME_BUFFERSIZE;
+  const static unsigned int V2_NEST_VERSION_BUFFERSIZE;
+
 public:
   NestReader(const std::string& filename);
   
@@ -66,7 +75,7 @@ public:
   double get_start() const { return t_start; };
   double get_end() const { return t_end; };
   double get_resolution() const { return resolution; };
-  int get_sionlib_rec_backend_version() const { return sionlib_rec_backend_version; };
+  unsigned int get_sionlib_rec_backend_version() const { return sionlib_rec_backend_version; };
   std::string get_nest_version() const { return nest_version; };
 
 protected:
@@ -84,7 +93,7 @@ private:
   double t_start;
   double t_end;
   double resolution;
-  int sionlib_rec_backend_version;
+  unsigned int sionlib_rec_backend_version;
   std::string nest_version;
 };
 
