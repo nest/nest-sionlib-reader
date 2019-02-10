@@ -52,7 +52,7 @@ for i in f:
 #""", np.array_repr(j))
         gid, step, offset = j[0], j[1], j[2]
         double_v = j[3] if i.double_n_val else None
-        long_v = j[4] if i.long_n_val else None
+        long_v = j[4] if i.long_n_val and i.double_n_val else j[3] if i.long_n_val else None
         write("""
 >> gid={}
 >> step={}
