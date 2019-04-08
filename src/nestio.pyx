@@ -114,9 +114,7 @@ cdef class DeviceData:
 
         self.strides[0] = itemsize
         self.shape[0] = rows
-        self.format = "=Q=q=d".encode()
-        if double_n_val > 0: self.format += "={}d".format(double_n_val).encode()
-        if long_n_val > 0: self.format += "={}q".format(long_n_val).encode()
+        self.format = "=Q=q=d={}d={}q".format(double_n_val, long_n_val).encode()
 
         buffer.buf = self.entry.get_raw()
         buffer.format = <char*> self.format

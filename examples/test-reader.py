@@ -50,13 +50,8 @@ for i in f:
 #        write("""
 #>> row={}
 #""", np.array_repr(j))
-        gid, step, offset = j[0], j[1], j[2]
 
-        double_v, long_v = {(False, False): lambda: (None, None),
-                            (True,  False): lambda: (j[3], None),
-                            (False, True):  lambda: (None, j[3]),
-                            (True,  True):  lambda: (j[3], j[4])
-                           }[i.double_n_val != 0, i.long_n_val != 0]()
+        gid, step, offset, double_v, long_v = j
 
         write("""
 >> gid={}

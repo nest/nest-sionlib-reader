@@ -58,10 +58,10 @@ class NestReader
   static const unsigned int MAX_SUPPORTED_SIONLIB_CONTAINER_FORMAT;
 
   // version 2 buffer sizes
-  const static unsigned int V2_DEV_NAME_BUFFERSIZE;
-  const static unsigned int V2_DEV_LABEL_BUFFERSIZE;
-  const static unsigned int V2_VALUE_NAME_BUFFERSIZE;
-  const static unsigned int V2_NEST_VERSION_BUFFERSIZE;
+  static const unsigned int V2_DEV_NAME_BUFFERSIZE;
+  static const unsigned int V2_DEV_LABEL_BUFFERSIZE;
+  static const unsigned int V2_VALUE_NAME_BUFFERSIZE;
+  static const unsigned int V2_NEST_VERSION_BUFFERSIZE;
 
 public:
   NestReader(const std::string& filename);
