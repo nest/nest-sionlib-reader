@@ -51,8 +51,18 @@ for i in f:
 #>> row={}
 #""", np.array_repr(j))
         gid, step, offset = j[0], j[1], j[2]
-        double_v = j[3] if i.double_n_val else None
-        long_v = j[4] if i.long_n_val and i.double_n_val else j[3] if i.long_n_val else None
+        if i.double_n_val:
+            double_v = j[3]
+            if i.long_n_val:
+                long_v = j[4]
+            else:
+                long_v = None
+        else:
+            double_v = None
+            if i.long_n_val:
+                long_v = j[3]
+            else:
+                long_v = None
         write("""
 >> gid={}
 >> step={}
