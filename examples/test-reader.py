@@ -51,18 +51,13 @@ for i in f:
 #>> row={}
 #""", np.array_repr(j))
         gid, step, offset = j[0], j[1], j[2]
-        if i.double_n_val:
-            double_v = j[3]
-            if i.long_n_val:
-                long_v = j[4]
-            else:
-                long_v = None
-        else:
-            double_v = None
-            if i.long_n_val:
-                long_v = j[3]
-            else:
-                long_v = None
+
+        double_v, long_v = {(False, False): lambda: (None, None),
+                            (True,  False): lambda: (j[3], None),
+                            (False, True):  lambda: (None, j[3]),
+                            (True,  True):  lambda: (j[3], j[4])
+                           }[i.double_n_val != 0, i.long_n_val != 0]()
+
         write("""
 >> gid={}
 >> step={}
