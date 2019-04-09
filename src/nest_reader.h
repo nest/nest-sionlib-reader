@@ -20,15 +20,17 @@
 
 struct DeviceData
 {
-  DeviceData(size_t rows, size_t values)
+DeviceData(size_t rows, size_t double_n_val, size_t long_n_val)
     : raw(std::make_shared<RawMemory>
 	  (rows * (sizeof(uint64_t)
 		   + sizeof(int64_t)
 		   + sizeof(double)
-		   + values * sizeof(double)))
+		   + double_n_val * sizeof(double)
+                   + long_n_val * sizeof(long)))
 	  )
     , rows(rows)
-    , values(values)
+    , double_n_val(double_n_val)
+    , long_n_val(long_n_val)
   {};
 
   char* get_raw() {return raw->get_buffer();};
@@ -39,14 +41,28 @@ struct DeviceData
   uint32_t type;
   std::string name;
   std::string label;
-  std::vector<std::string> observables;
+  long origin;
+  long t_start;
+  long t_stop;
+  std::vector<std::string> double_observables;
+  std::vector<std::string> long_observables;
 
-  size_t rows;
-  size_t values;
+  size_t rows; // number of data points
+  size_t double_n_val;
+  size_t long_n_val;
 };
 
 class NestReader
 {
+  static const unsigned int MIN_SUPPORTED_SIONLIB_CONTAINER_FORMAT;
+  static const unsigned int MAX_SUPPORTED_SIONLIB_CONTAINER_FORMAT;
+
+  // version 2 buffer sizes
+  static const unsigned int V2_DEV_NAME_BUFFERSIZE;
+  static const unsigned int V2_DEV_LABEL_BUFFERSIZE;
+  static const unsigned int V2_VALUE_NAME_BUFFERSIZE;
+  static const unsigned int V2_NEST_VERSION_BUFFERSIZE;
+
 public:
   NestReader(const std::string& filename);
   
@@ -56,9 +72,11 @@ public:
   };
   std::vector<uint64_t> list_devices();
 
-  double get_start() {return t_start;};
-  double get_end() {return t_end;};
-  double get_resolution() {return resolution;};
+  double get_start() const { return t_start; };
+  double get_end() const { return t_end; };
+  double get_resolution() const { return resolution; };
+  unsigned int get_sionlib_rec_backend_version() const { return sionlib_rec_backend_version; };
+  std::string get_nest_version() const { return nest_version; };
 
 protected:
   void read_devices(SIONReader&);
@@ -66,15 +84,17 @@ protected:
 
 private:
   std::map<uint64_t, DeviceData> data;
-  DeviceData& add_entry(uint64_t dev_id, size_t n_rec, size_t n_val) {
+  DeviceData& add_entry( uint64_t dev_id, size_t n_rec, size_t double_n_val, size_t long_n_val ) {
     return data
-      .insert(std::make_pair(dev_id, DeviceData(n_rec, n_val)))
+      .insert(std::make_pair(dev_id, DeviceData(n_rec, double_n_val, long_n_val)))
       .first->second;
   };
 
   double t_start;
   double t_end;
   double resolution;
+  unsigned int sionlib_rec_backend_version;
+  std::string nest_version;
 };
 
 #endif // NESTIO_H

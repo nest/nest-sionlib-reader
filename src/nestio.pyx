@@ -12,10 +12,15 @@ cdef extern from "nest_reader.h":
         uint32_t type;
         string name;
         string label;
-        vector[string] observables;
+        int64_t origin;
+        int64_t t_start;
+        int64_t t_stop;
+        vector[string] double_observables;
+        vector[string] long_observables;
 
         size_t rows;
-        size_t values;
+        size_t double_n_val;
+        size_t long_n_val;
 
     cdef cppclass CNestReader "NestReader":
         CNestReader(string) except +
@@ -26,6 +31,8 @@ cdef extern from "nest_reader.h":
         double get_start() except +
         double get_end() except +
         double get_resolution() except +
+        int64_t get_sionlib_rec_backend_version() except +
+        string get_nest_version() except +
 
 cdef class DeviceData:
     cdef CDeviceData* entry
@@ -58,17 +65,37 @@ cdef class DeviceData:
         def __get__(self):
             return self.entry.label
 
-    property observables:
+    property origin:
         def __get__(self):
-            return <list> self.entry.observables
+            return self.entry.origin
+
+    property t_start:
+        def __get__(self):
+            return self.entry.t_start
+
+    property t_stop:
+        def __get__(self):
+            return self.entry.t_stop
+
+    property double_observables:
+        def __get__(self):
+            return <list> self.entry.double_observables
+
+    property long_observables:
+        def __get__(self):
+            return <list> self.entry.long_observables
 
     property rows:
         def __get__(self):
             return self.entry.rows
 
-    property values:
+    property double_n_val:
         def __get__(self):
-            return self.entry.values
+            return self.entry.double_n_val
+
+    property long_n_val:
+        def __get__(self):
+            return self.entry.long_n_val
 
     def __getbuffer__(self, Py_buffer* buffer, int flags):
         try: self.getbuffer_(buffer, flags)
@@ -77,17 +104,17 @@ cdef class DeviceData:
             raise
 
     cdef getbuffer_(self, Py_buffer* buffer, int flags):
-        # underlying object: [gid=uint64, step=int64, offset=double, values....][shape[0]]
+        # underlying object: [gid=uint64, step=int64, offset=double, double_values..., long_values...][shape[0]]
         # Length of row: shape[1]
         cdef:
             size_t rows   = self.entry.rows
-            size_t values = self.entry.values
-            Py_ssize_t itemsize = sizeof(uint64_t) + sizeof(int64_t) + sizeof(double) + values*sizeof(double)
+            size_t double_n_val = self.entry.double_n_val
+            size_t long_n_val = self.entry.long_n_val
+            Py_ssize_t itemsize = sizeof(uint64_t) + sizeof(int64_t) + sizeof(double) + double_n_val*sizeof(double) + long_n_val*sizeof(int64_t)
 
         self.strides[0] = itemsize
         self.shape[0] = rows
-        self.format = "=Q=q=d".encode()
-        if values > 0: self.format += "={}d".format(values).encode()
+        self.format = "=Q=q=d={}d={}q".format(double_n_val, long_n_val).encode()
 
         buffer.buf = self.entry.get_raw()
         buffer.format = <char*> self.format
@@ -135,3 +162,11 @@ cdef class NestReader:
     property resolution:
         def __get__(self):
             return self.reader.get_resolution()
+
+    property sionlib_rec_backend_version:
+        def __get__(self):
+            return self.reader.get_sionlib_rec_backend_version()
+
+    property nest_version:
+        def __get__(self):
+            return self.reader.get_nest_version()

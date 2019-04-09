@@ -7,6 +7,14 @@
 
 #include "nest_reader.h"
 
+const unsigned int NestReader::MIN_SUPPORTED_SIONLIB_CONTAINER_FORMAT = 2;
+const unsigned int NestReader::MAX_SUPPORTED_SIONLIB_CONTAINER_FORMAT = 2;
+
+const unsigned int NestReader::V2_DEV_NAME_BUFFERSIZE = 32;
+const unsigned int NestReader::V2_DEV_LABEL_BUFFERSIZE = 32;
+const unsigned int NestReader::V2_VALUE_NAME_BUFFERSIZE = 16;
+const unsigned int NestReader::V2_NEST_VERSION_BUFFERSIZE = 128;
+
 NestReader::NestReader(const std::string& filename)
 {
   SIONReader reader(filename);
@@ -27,15 +35,43 @@ NestReader::NestReader(const std::string& filename)
   t_end      = reader.read<double>();
   resolution = reader.read<double>();
 
+  sionlib_rec_backend_version = reader.read<sion_uint32>();
+  // Check that the backend version that created the file
+  // matches the version that the reader supports
+  if ( sionlib_rec_backend_version < MIN_SUPPORTED_SIONLIB_CONTAINER_FORMAT or
+       sionlib_rec_backend_version > MAX_SUPPORTED_SIONLIB_CONTAINER_FORMAT )
+  {
+    std::stringstream error_msg;
+    error_msg << "The NESTReader only supports sionlib container file formats from "
+              << MIN_SUPPORTED_SIONLIB_CONTAINER_FORMAT
+              << " to "
+              << MAX_SUPPORTED_SIONLIB_CONTAINER_FORMAT
+              << ". Found format "
+              << sionlib_rec_backend_version
+              << ".";
+    throw std::runtime_error( error_msg.str() );
+  }
+
+  char nest_version_buffer[V2_NEST_VERSION_BUFFERSIZE];
+  reader.read(nest_version_buffer);
+  nest_version = nest_version_buffer;
+
   read_devices(reader);
 
+  // For each rank, read data until end of the rank's valid file content
+  sion_int64 stop_blk, stop_pos;
   for (int rank = 0; rank < reader.get_ranks(); ++rank)
   {
     if (rank) { // rank > 0, end is just the END_POS
       reader.seek(rank, SION_END_POS);
-      reader.get_current_location(&info_blk, &info_pos);
-    } // else rank == 0, use beginning of metadata
-    read_values(reader, {rank, info_blk, info_pos});
+      reader.get_current_location(&stop_blk, &stop_pos);
+    }
+    else // rank == 0, end is just the beginning of metadata section
+    {
+      stop_blk = info_blk;
+      stop_pos = info_pos;
+    }
+    read_values(reader, {rank, stop_blk, stop_pos});
   }
 }
 
@@ -46,29 +82,44 @@ void NestReader::read_devices(SIONReader& reader)
     auto dev_id = reader.read<sion_uint64>();
     auto type = reader.read<sion_uint32>();
     
-    char name[16];
-    char label[16];
+    char name[V2_DEV_NAME_BUFFERSIZE];
+    char label[V2_DEV_LABEL_BUFFERSIZE];
     reader.read(name);
     reader.read(label);
     
+    auto origin = reader.read<sion_int64>();
+    auto t_start = reader.read<sion_int64>();
+    auto t_stop = reader.read<sion_int64>();
     auto n_rec = reader.read<sion_uint64>();
-    auto n_val = reader.read<sion_uint32>();
-    
-    std::vector<std::string> observables;
-    for (size_t j = 0; j < n_val; ++j)
+    auto double_n_val = reader.read<sion_uint32>();
+    auto long_n_val = reader.read<sion_uint32>();
+
+    std::vector<std::string> double_observables;
+    for (size_t j = 0; j < double_n_val; ++j)
     {
-      char ob_name[8];
+      char ob_name[V2_VALUE_NAME_BUFFERSIZE];
       reader.read(ob_name);
-      observables.push_back(ob_name);
+      double_observables.push_back(ob_name);
+    }
+    std::vector<std::string> long_observables;
+    for (size_t j = 0; j < long_n_val; ++j)
+    {
+      char ob_name[V2_VALUE_NAME_BUFFERSIZE];
+      reader.read(ob_name);
+      long_observables.push_back(ob_name);
     }
 
-    DeviceData& entry = add_entry(dev_id, n_rec, n_val);
+    DeviceData& entry = add_entry(dev_id, n_rec, double_n_val, long_n_val);
 
     entry.gid = dev_id;
     entry.type = type;
     entry.name = name;
     entry.label = label;
-    entry.observables = observables;
+    entry.origin = origin;
+    entry.t_start = t_start;
+    entry.t_stop = t_stop;
+    entry.double_observables = double_observables;
+    entry.long_observables = long_observables;
   }
 }
 
@@ -77,17 +128,20 @@ void NestReader::read_values(SIONReader& reader, const SIONRankReader::SIONPos& 
   auto rank_ptr = reader.make_rank_reader(v);
 
   while (! rank_ptr->eof()) {
-    auto device_gid = rank_ptr->read<sion_uint64>();
-    auto neuron_gid = rank_ptr->read<sion_uint64>();
-    auto step       = rank_ptr->read<sion_int64>();
-    auto offset     = rank_ptr->read<double>();
-    auto n_values   = rank_ptr->read<sion_uint32>();
+    auto device_gid   = rank_ptr->read<sion_uint64>();
+    auto neuron_gid   = rank_ptr->read<sion_uint64>();
+    auto step         = rank_ptr->read<sion_int64>();
+    auto offset       = rank_ptr->read<double>();
+    auto double_n_val = rank_ptr->read<sion_uint32>();
+    auto long_n_val   = rank_ptr->read<sion_uint32>();
 
     RawMemory& buffer = *data.find(device_gid)->second.raw;
     buffer << neuron_gid << step << offset;
 
-    auto subbuf = buffer.get_region<double>(n_values);
-    rank_ptr->read(subbuf, n_values);
+    auto double_subbuf = buffer.get_region<double>(double_n_val);
+    rank_ptr->read(double_subbuf, double_n_val);
+    auto long_subbuf = buffer.get_region<long>(long_n_val);
+    rank_ptr->read(long_subbuf, long_n_val);
   }
 }
 
